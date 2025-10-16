@@ -1,0 +1,27 @@
+{
+  "total_games": 6600,
+  "seasons": [
+    "2015-16",
+    "2016-17",
+    "2017-18",
+    "2018-19",
+    "2019-20",
+    "2020-21"
+  ],
+  "date_range": [
+    "April 1 2016",
+    "September 9 2020"
+  ],
+  "pattern_shape": [
+    18
+  ],
+  "processing_time_minutes": 1.7807229518890382,
+  "diff_stats": {
+    "mean_at_6min": 1.1356060606060605,
+    "std_at_6min": 9.575278447831252,
+    "mean_at_halftime": 1.5215151515151515,
+    "std_at_halftime": 10.874833379772145,
+    "mean_change": 0.3859090909090909,
+    "std_change": 5.936856323112527
+  }
+}

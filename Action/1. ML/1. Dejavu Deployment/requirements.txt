@@ -1,0 +1,24 @@
+# Dejavu Model Requirements
+# Minimal dependencies for production deployment
+
+# Core scientific computing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Fast data loading
+pyarrow>=12.0.0  # For parquet files
+fastparquet>=2023.4.0
+
+# Optional: DTW distance (if using DTW metric)
+fastdtw>=0.3.4
+
+# For deployment
+fastapi>=0.100.0  # API serving
+uvicorn>=0.23.0  # ASGI server
+pydantic>=2.0.0  # Data validation
+
+# Development/testing only
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+

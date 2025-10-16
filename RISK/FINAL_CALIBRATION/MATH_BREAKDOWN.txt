@@ -1,0 +1,715 @@
+# Final Calibration - Mathematical Foundations
+
+**Subject:** Capital preservation and absolute risk limits  
+**Foundations:** Risk of ruin theory, Bankroll preservation, Institutional risk controls  
+**Application:** Final safety layer capping all bets at 15% of original bankroll  
+**Date:** October 15, 2025
+
+================================================================================
+SECTION 1: ABSOLUTE MAXIMUM BET FORMULA
+================================================================================
+
+### Formula 1.1: Absolute Maximum (The Hard Rule)
+
+Bet_max = B_0 × α_max
+
+Where:
+  Bet_max = Maximum allowed bet (never exceeded)
+  B_0 = Original starting bankroll ($5,000)
+  α_max = Maximum fraction (0.15 = 15%)
+
+Example:
+  B_0 = $5,000
+  α_max = 0.15
+  
+  Bet_max = $5,000 × 0.15 = $750
+
+This value NEVER changes, regardless of:
+  - Current bankroll ($3,000 or $10,000)
+  - Recommended bet from other layers
+  - Edge size or confidence level
+  - Power modes or TURBO states
+
+---
+
+### Formula 1.2: Calibration Function
+
+Bet_final = min(Bet_recommended, Bet_max)
+
+Example 1:
+  Bet_recommended = $500
+  Bet_max = $750
+  Bet_final = min($500, $750) = $500 (under limit, no reduction)
+
+Example 2:
+  Bet_recommended = $1,750
+  Bet_max = $750
+  Bet_final = min($1,750, $750) = $750 (capped)
+
+---
+
+### Formula 1.3: Reduction Percentage
+
+Reduction_pct = (Bet_recommended - Bet_final) / Bet_recommended
+
+Example:
+  Bet_recommended = $1,750
+  Bet_final = $750
+  
+  Reduction_pct = ($1,750 - $750) / $1,750
+                = $1,000 / $1,750
+                = 0.571 (57.1% reduction applied)
+
+================================================================================
+SECTION 2: CONFIDENCE SCALING FORMULAS
+================================================================================
+
+### Formula 2.1: ML Confidence Factor
+
+f_confidence = max(0.60, min(1.05, a + b × confidence))
+
+Where:
+  a = 0.45 (intercept)
+  b = 0.60 (slope)
+  confidence = ML confidence from interval width (0-1)
+
+Example:
+  High confidence (0.95):
+    f_confidence = 0.45 + 0.60 × 0.95 = 1.02 (slight boost)
+  
+  Medium confidence (0.75):
+    f_confidence = 0.45 + 0.60 × 0.75 = 0.90 (10% reduction)
+  
+  Low confidence (0.50):
+    f_confidence = 0.45 + 0.60 × 0.50 = 0.75 (25% reduction)
+
+Clipped to [0.60, 1.05] range
+
+---
+
+### Formula 2.2: Edge Size Factor
+
+f_edge = max(0.70, min(1.00, edge / 0.20))
+
+Where edge is the ML-market probability difference
+
+Example:
+  Large edge (0.25 = 25%):
+    f_edge = 0.25 / 0.20 = 1.25 → capped at 1.00
+  
+  Moderate edge (0.15 = 15%):
+    f_edge = 0.15 / 0.20 = 0.75 → below cap, use 0.75
+  
+  Small edge (0.08 = 8%):
+    f_edge = 0.08 / 0.20 = 0.40 → floored at 0.70
+
+Range: [0.70, 1.00]
+
+---
+
+### Formula 2.3: Calibration Status Factor
+
+f_calibration = {
+    EXCELLENT: 1.05,
+    GOOD: 1.00,
+    FAIR: 0.90,
+    POOR: 0.70,
+    VERY_POOR: 0.50
+}
+
+Based on model calibration monitor from enhancement layer
+
+---
+
+### Formula 2.4: Bankroll Health Factor
+
+f_health = max(0.60, min(1.00, B_current / B_0))
+
+Where:
+  B_current = Current bankroll
+  B_0 = Original bankroll
+
+Example:
+  Up 50% ($7,500):
+    f_health = $7,500 / $5,000 = 1.50 → capped at 1.00
+  
+  Even ($5,000):
+    f_health = $5,000 / $5,000 = 1.00
+  
+  Down 20% ($4,000):
+    f_health = $4,000 / $5,000 = 0.80
+  
+  Down 50% ($2,500):
+    f_health = $2,500 / $5,000 = 0.50 → floored at 0.60
+
+Range: [0.60, 1.00]
+
+---
+
+### Formula 2.5: Combined Scaling
+
+Bet_scaled = Bet_capped × f_confidence × f_edge × f_calibration × f_health
+
+Where Bet_capped = min(Bet_recommended, Bet_max)
+
+Final bet:
+Bet_final = min(Bet_scaled, Bet_max)  # Can't exceed max even after scaling
+
+Example:
+  Bet_capped = $750
+  f_confidence = 0.92
+  f_edge = 0.95
+  f_calibration = 1.05
+  f_health = 0.90
+  
+  Bet_scaled = $750 × 0.92 × 0.95 × 1.05 × 0.90
+             = $750 × 0.832
+             = $624
+  
+  Bet_final = min($624, $750) = $624
+
+Final bet: $624 (17% reduction from max due to moderate health)
+
+================================================================================
+SECTION 3: PORTFOLIO-WIDE CALIBRATION
+================================================================================
+
+### Formula 3.1: Total Exposure Limit
+
+Total_max = B_0 × α_total
+
+Where α_total = 0.50 (50% of original bankroll)
+
+Example:
+  B_0 = $5,000
+  Total_max = $5,000 × 0.50 = $2,500
+
+Maximum total across ALL bets: $2,500
+
+---
+
+### Formula 3.2: Proportional Scaling
+
+If Σ(Bet_i) > Total_max:
+
+  scaling_factor = Total_max / Σ(Bet_i)
+  
+  Bet_i_final = Bet_i × scaling_factor for all i
+
+Example:
+  6 bets: [$750, $750, $600, $500, $550, $600]
+  Total: $3,750
+  Limit: $2,500
+  
+  Exceeds: YES ($3,750 > $2,500)
+  
+  Scaling factor = $2,500 / $3,750 = 0.667
+  
+  Scaled bets: [$500, $500, $400, $333, $367, $400]
+  Total: $2,500 (exactly at limit)
+
+All bets reduced proportionally to stay within portfolio limit
+
+---
+
+### Formula 3.3: Reserve Requirement
+
+Reserve_required = B_0 × 0.50
+
+Must maintain: B_current - Σ(Bet_i) ≥ Reserve_required
+
+Example:
+  Original: $5,000
+  Reserve: $2,500
+  Current: $4,800
+  Proposed bets: $2,500 total
+  
+  Check: $4,800 - $2,500 = $2,300
+  Required: $2,500
+  
+  FAIL: $2,300 < $2,500
+  
+  Action: Reduce bets to maintain reserve
+  Max bets: $4,800 - $2,500 = $2,300
+
+This ensures you always have 50% of original bankroll in reserve
+
+================================================================================
+SECTION 4: SAFETY MODE MATHEMATICS
+================================================================================
+
+### Formula 4.1: Safety Mode Determination
+
+Mode = {
+  GREEN:  if calibration ∈ {EXCELLENT, GOOD} AND B_current > 0.80 × B_0 AND win_rate > 0.55
+  YELLOW: if calibration = FAIR OR (0.60 < B_current/B_0 < 0.80) OR (0.50 < win_rate < 0.55)
+  RED:    if calibration ∈ {POOR, VERY_POOR} OR B_current < 0.60 × B_0 OR win_rate < 0.50
+}
+
+---
+
+### Formula 4.2: Mode-Specific Limits
+
+α_max(Mode) = {
+  GREEN:  0.15 (15% of original)
+  YELLOW: 0.12 (12% of original)
+  RED:    0.08 (8% of original)
+}
+
+Example transitions:
+  GREEN: Max bet = $750
+  → YELLOW triggered: Max bet = $600 (20% reduction)
+  → RED triggered: Max bet = $400 (47% reduction from GREEN)
+
+---
+
+### Formula 4.3: Drawdown-Triggered Mode
+
+Mode_DD = {
+  GREEN:  if DD < 0.15
+  YELLOW: if 0.15 ≤ DD < 0.25
+  RED:    if DD ≥ 0.25
+}
+
+Where DD = (Peak_bankroll - Current_bankroll) / Peak_bankroll
+
+Example:
+  Peak: $6,000
+  Current: $4,500
+  DD = ($6,000 - $4,500) / $6,000 = 0.25 (25% drawdown)
+  
+  Mode_DD = RED (hit 25% threshold)
+  Max bet: $400 (8% of original)
+
+================================================================================
+SECTION 5: PROGRESSIVE BETTING LIMITS
+================================================================================
+
+### Formula 5.1: Maximum Cumulative in Progression
+
+Max_progression_total = B_0 × 0.30
+
+Example:
+  B_0 = $5,000
+  Max_progression_total = $1,500
+
+If in 3-level progression:
+  Level 1: $750
+  Level 2: Can add max $750 more (total $1,500)
+  Level 3: Already at limit ($1,500), can't add more
+
+This prevents Decision Tree from exceeding 30% of original in single sequence
+
+---
+
+### Formula 5.2: Level-Specific Caps
+
+For progression Level N, bet is minimum of:
+
+Bet_N = min(
+    Bet_required,           # What's needed to recover
+    B_0 × 0.15,            # Absolute maximum
+    B_current × 0.20,       # 20% of current
+    Max_prog - Σ(Bets_previous)  # Total progression limit
+)
+
+Example (Level 2):
+  Bet_required = $1,800 (to recover Level 1 loss)
+  B_0 × 0.15 = $750
+  B_current × 0.20 = $4,250 × 0.20 = $850
+  Max_prog - Previous = $1,500 - $750 = $750
+  
+  Bet_2 = min($1,800, $750, $850, $750) = $750
+
+Capped at $750 by multiple limits
+
+================================================================================
+SECTION 6: RISK OF RUIN WITH CALIBRATION
+================================================================================
+
+### Formula 6.1: Probability of Ruin (Modified)
+
+With fixed fraction f of original bankroll:
+
+P(Ruin) = (q/p)^(1/f)
+
+Where:
+  p = Win probability
+  q = 1 - p
+  f = Fraction of original bankroll per bet
+
+Example:
+  p = 0.60
+  f = 0.15 (15% per bet)
+  
+  P(Ruin) = (0.40/0.60)^(1/0.15)
+          = (0.667)^6.67
+          = 0.088 (8.8% risk of ruin)
+
+With f = 0.20 (20% per bet):
+  P(Ruin) = (0.667)^5 = 0.132 (13.2%)
+
+15% rule reduces ruin risk by 33% vs 20% rule
+
+---
+
+### Formula 6.2: Expected Survival Time
+
+E[T_ruin] = B_0 / ((p - q) × f × B_0)
+          = 1 / ((p - q) × f)
+
+Example:
+  p = 0.60, q = 0.40
+  f = 0.15
+  
+  E[T_ruin] = 1 / ((0.60 - 0.40) × 0.15)
+            = 1 / 0.03
+            = 33.3 bets
+
+Expected to survive 33 bets before ruin (if constantly betting max)
+
+With f = 0.20:
+  E[T_ruin] = 1 / 0.04 = 25 bets
+
+15% rule extends survival by 33% vs 20%
+
+---
+
+### Formula 6.3: Maximum Drawdown Probability
+
+For fixed fraction f, maximum drawdown distribution:
+
+P(DD > x) = (q/p)^(x/f)
+
+Example:
+  f = 0.15, x = 0.30 (30% drawdown)
+  p = 0.60
+  
+  P(DD > 0.30) = (0.667)^(0.30/0.15)
+               = (0.667)^2
+               = 0.445 (44.5%)
+
+44.5% chance of experiencing >30% drawdown
+
+With f = 0.20:
+  P(DD > 0.30) = (0.667)^1.5 = 0.544 (54.4%)
+
+15% rule reduces severe drawdown probability
+
+================================================================================
+SECTION 7: SCALING FACTOR MATHEMATICS
+================================================================================
+
+### Formula 7.1: Confidence Scaling Function
+
+S_confidence(c) = a + b × c
+
+Where:
+  c = Confidence level (0-1)
+  a = 0.45 (minimum at c=0)
+  b = 0.60 (slope)
+
+Result capped at [0.60, 1.05]
+
+Example values:
+  c = 0.50: S = 0.45 + 0.60×0.50 = 0.75
+  c = 0.75: S = 0.45 + 0.60×0.75 = 0.90
+  c = 0.90: S = 0.45 + 0.60×0.90 = 0.99
+  c = 0.95: S = 0.45 + 0.60×0.95 = 1.02
+
+At 95% confidence, slight boost to 102%
+
+---
+
+### Formula 7.2: Edge Scaling Function
+
+S_edge(e) = e / e_ref
+
+Where:
+  e = Actual edge (0-0.30)
+  e_ref = Reference edge (0.20 = 20%)
+
+Result capped at [0.70, 1.00]
+
+Example values:
+  e = 0.25: S = 0.25/0.20 = 1.25 → capped at 1.00
+  e = 0.15: S = 0.15/0.20 = 0.75
+  e = 0.10: S = 0.10/0.20 = 0.50 → floored at 0.70
+
+---
+
+### Formula 7.3: Combined Scaling
+
+S_combined = S_confidence × S_edge × S_calibration × S_health
+
+Example:
+  S_confidence = 0.92
+  S_edge = 0.95
+  S_calibration = 1.05
+  S_health = 0.90
+  
+  S_combined = 0.92 × 0.95 × 1.05 × 0.90
+             = 0.832
+
+Final bet: Bet_max × S_combined = $750 × 0.832 = $624
+
+---
+
+### Formula 7.4: Final Calibration Formula (Complete)
+
+Bet_final = min(
+    Bet_recommended,                           # From previous layers
+    B_0 × α_mode,                              # Mode-specific max
+    (B_0 × α_mode) × S_combined,               # Scaled within mode limit
+    B_current × 0.25                           # Never >25% of current
+)
+
+Where:
+  α_mode ∈ {0.15, 0.12, 0.08} depending on safety mode
+
+This is the master formula combining all constraints
+
+================================================================================
+SECTION 8: RESERVE REQUIREMENT MATHEMATICS
+================================================================================
+
+### Formula 8.1: Minimum Reserve
+
+R_min = B_0 × 0.50
+
+Must always maintain: B_current ≥ R_min
+
+Example:
+  B_0 = $5,000
+  R_min = $2,500
+  
+  If B_current = $2,800:
+    Available to bet = $2,800 - $2,500 = $300
+    
+  Even if recommended bet is $750, can only bet $300
+
+This is the absolute floor - never drop below 50% of original
+
+---
+
+### Formula 8.2: Available Capital
+
+Available = B_current - R_min - Σ(Active_bets)
+
+Example:
+  Current bankroll: $4,500
+  Reserve: $2,500
+  Active bets: $500 (pending)
+  
+  Available = $4,500 - $2,500 - $500 = $1,500
+
+Can allocate up to $1,500 across new bets
+
+---
+
+### Formula 8.3: Capital Allocation Limit
+
+For n proposed bets:
+
+If Σ(Bet_i) > Available:
+  Scale all: Bet_i_final = Bet_i × (Available / Σ(Bet_i))
+
+Example:
+  Available: $1,500
+  Proposed: [$750, $600, $500, $400] = $2,250
+  
+  Exceeds: YES
+  
+  Scaling: $1,500 / $2,250 = 0.667
+  
+  Final: [$500, $400, $333, $267] = $1,500
+
+================================================================================
+SECTION 9: PERFORMANCE METRICS
+================================================================================
+
+### Formula 9.1: Calibration Effectiveness
+
+Effectiveness = Avg(Bet_recommended - Bet_final) / Avg(Bet_recommended)
+
+Higher effectiveness = More calibration happening
+
+Example (10 bets):
+  Recommended: [$500, $1,200, $900, $400, $1,500, $800, $600, $1,100, $700, $1,000]
+  Final: [$500, $750, $750, $400, $750, $750, $600, $750, $700, $750]
+  
+  Avg_recommended = $860
+  Avg_final = $670
+  
+  Effectiveness = ($860 - $670) / $860 = 0.221 (22.1%)
+
+22% average reduction applied by calibration layer
+
+---
+
+### Formula 9.2: Protection Score
+
+Protection = (Bet_max / Max_Layer_Recommendation)
+
+Lower score = More protection applied
+
+Example:
+  Max from layers: $2,500 (Decision Tree TURBO)
+  Calibration max: $750
+  
+  Protection = $750 / $2,500 = 0.30
+
+Only 30% of aggressive recommendation allowed (70% protection)
+
+================================================================================
+SECTION 10: COMPUTATIONAL PERFORMANCE
+================================================================================
+
+All calculations must be real-time (<10ms):
+
+Operation                        Complexity    Time Target
+──────────────────────────────────────────────────────────
+Check absolute maximum           O(1)          <0.5ms
+Determine safety mode            O(1)          <1ms
+Calculate confidence factors     O(1)          <2ms
+Apply combined scaling           O(1)          <1ms
+Check portfolio total            O(n)          <2ms (n≤10)
+Apply proportional scaling       O(n)          <2ms
+Validate reserve requirement     O(1)          <1ms
+──────────────────────────────────────────────────────────
+TOTAL                                          <10ms
+
+Result: Fastest layer, acts as instant sanity check
+
+================================================================================
+SECTION 11: STATISTICAL GUARANTEES
+================================================================================
+
+### Formula 11.1: Maximum Single-Bet Loss
+
+L_max_single = B_0 × α_max = $5,000 × 0.15 = $750
+
+Worst single outcome: -$750 (15% of original)
+
+---
+
+### Formula 11.2: Maximum 5-Bet Loss
+
+L_max_5bet = 5 × Bet_max = 5 × $750 = $3,750
+
+Absolute worst case (lose 5 in a row): -$3,750 (75% of original)
+
+Probability: P = 0.40^5 = 0.01024 (1.02%)
+
+Expected: Lose this much once per 98 five-bet sequences
+
+---
+
+### Formula 11.3: Survival Probability
+
+P(Survive N bets) = 1 - P(Ruin in N bets)
+
+For f = 0.15, p = 0.60:
+  P(Ruin in 50 bets) ≈ 5%
+  P(Survive 50 bets) ≈ 95%
+
+For f = 0.20, p = 0.60:
+  P(Ruin in 50 bets) ≈ 12%
+  P(Survive 50 bets) ≈ 88%
+
+15% rule improves survival probability significantly
+
+================================================================================
+SECTION 12: BANKROLL GROWTH WITH CALIBRATION
+================================================================================
+
+### Formula 12.1: Expected Growth Rate (With Cap)
+
+For capped betting at fixed fraction f of original:
+
+G = p × log(1 + f×b) + q × log(1 - f)
+
+Where b = net odds (0.909 for -110)
+
+Example:
+  p = 0.60, f = 0.15
+  
+  G = 0.60 × log(1 + 0.15×0.909) + 0.40 × log(1 - 0.15)
+    = 0.60 × log(1.136) + 0.40 × log(0.85)
+    = 0.60 × 0.128 + 0.40 × (-0.163)
+    = 0.077 - 0.065
+    = 0.012 (1.2% per bet)
+
+Expected growth: 1.2% per bet
+
+---
+
+### Formula 12.2: Bankroll After N Bets
+
+B_N = B_0 × e^(G×N)
+
+Example (100 bets):
+  B_0 = $5,000
+  G = 0.012
+  N = 100
+  
+  B_100 = $5,000 × e^(0.012×100)
+        = $5,000 × e^1.2
+        = $5,000 × 3.32
+        = $16,600
+
+After 100 bets: 3.3× growth (vs 4× without calibration)
+
+Trade-off: 25% less growth for 70% less risk
+
+---
+
+### Formula 12.3: Growth Comparison
+
+Growth_with_calibration / Growth_without
+
+For f_capped = 0.15 vs f_aggressive = 0.25:
+
+Ratio = e^(G_15 × N) / e^(G_25 × N)
+      = e^((G_15 - G_25) × N)
+
+Example (100 bets):
+  G_15 = 0.012
+  G_25 = 0.018
+  
+  Ratio = e^((0.012 - 0.018) × 100)
+        = e^(-0.6)
+        = 0.549
+
+With calibration: 55% of aggressive growth
+But: 45% reduction in risk of ruin
+
+Worthwhile trade-off for safety
+
+================================================================================
+END OF MATHEMATICAL FOUNDATIONS
+================================================================================
+
+Summary Formulas:
+
+1. Absolute maximum: Bet_max = B_0 × 0.15 = $750 (NEVER CHANGES)
+2. Calibration: Bet_final = min(Bet_rec, Bet_max)
+3. Confidence scaling: S = f_conf × f_edge × f_calib × f_health
+4. Scaled bet: min(Bet_max × S, Bet_max)
+5. Portfolio limit: Σ(Bet_i) ≤ B_0 × 0.50 = $2,500
+6. Reserve requirement: B_current - Σ(Bet_i) ≥ B_0 × 0.50
+7. Safety modes: GREEN (15%), YELLOW (12%), RED (8%)
+
+Performance: All calculations <10ms (instant sanity check)
+
+Applied to $5,000 bankroll:
+- Single bet max: $750 (15% of $5,000 original)
+- Total portfolio max: $2,500 (50% of original)
+- Reserve required: $2,500 (50% always held)
+- Progressive sequence max: $1,500 (30% of original)
+
+Result: Strong protection against catastrophic loss
+Trade-off: ~25% slower growth for 70% less risk of ruin
+
+This is institutional-grade capital preservation.
+

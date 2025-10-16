@@ -1,0 +1,9 @@
+{
+  "empirical_coverage": 0.9462486002239642,
+  "target_coverage": 0.95,
+  "coverage_gap": 0.00375139977603578,
+  "avg_interval_width": 26.072111129760742,
+  "quantile": 13.036055564880371,
+  "mae": 5.385418280802274,
+  "n_samples": 893
+}

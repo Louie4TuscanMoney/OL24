@@ -1,0 +1,33 @@
+{
+  "split_date": "2025-10-15T06:30:48.706189",
+  "total_games": 6600,
+  "total_dates": 1060,
+  "train_games": 4003,
+  "train_dates": 636,
+  "val_games": 772,
+  "val_dates": 106,
+  "calibration_games": 932,
+  "calibration_dates": 159,
+  "test_games": 893,
+  "test_dates": 159,
+  "train_ratio_actual": 0.6065151515151516,
+  "val_ratio_actual": 0.11696969696969697,
+  "calibration_ratio_actual": 0.1412121212121212,
+  "test_ratio_actual": 0.1353030303030303,
+  "train_date_range": [
+    "2015-10-27T00:00:00",
+    "2018-10-25T00:00:00"
+  ],
+  "val_date_range": [
+    "2018-10-26T00:00:00",
+    "2019-02-10T00:00:00"
+  ],
+  "calibration_date_range": [
+    "2019-02-11T00:00:00",
+    "2019-12-25T00:00:00"
+  ],
+  "test_date_range": [
+    "2019-12-26T00:00:00",
+    "2021-01-20T00:00:00"
+  ]
+}

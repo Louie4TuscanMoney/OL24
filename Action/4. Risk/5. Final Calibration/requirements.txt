@@ -1,0 +1,5 @@
+# Final Calibration Dependencies
+# Following: FINAL_CALIBRATION/Applied Model/
+
+# No additional dependencies beyond numpy (used by other layers)
+

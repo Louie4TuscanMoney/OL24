@@ -1,0 +1,672 @@
+# Risk Optimization - Mathematical Foundations
+
+**Subject:** Complete mathematical framework for optimal bet sizing  
+**Foundations:** Kelly Criterion (1956), Black-Scholes (1973), Bankroll Theory  
+**Application:** NBA betting with ML predictions and market odds  
+**Date:** October 15, 2025
+
+================================================================================
+SECTION 1: KELLY CRITERION (OPTIMAL BET SIZING)
+================================================================================
+
+Original Paper: Kelly, J. L. (1956). "A New Interpretation of Information Rate"
+Bell System Technical Journal, 35(4), 917-926.
+
+--- Formula 1.1: Basic Kelly Criterion ---
+
+f* = (p(b+1) - 1) / b
+
+Where:
+  f* = Optimal fraction of bankroll to bet
+  p  = Probability of winning (from ML model)
+  b  = Net odds received (decimal odds - 1)
+
+Example 1: Favorable bet
+  p = 0.65 (65% win probability from ML)
+  American odds = -110
+  b = (100/110) = 0.909
+  
+  f* = (0.65 × 1.909 - 1) / 0.909
+     = (1.241 - 1) / 0.909
+     = 0.241 / 0.909
+     = 0.265 (26.5% of bankroll)
+
+Example 2: With vig adjustment
+  True probability: 0.65
+  Market implied: 0.524
+  Edge: 0.126 (12.6%)
+  
+  f* = 0.126 / 0.909 = 0.139 (13.9% of bankroll)
+
+--- Formula 1.2: Fractional Kelly ---
+
+Many professionals use fractional Kelly to reduce variance:
+
+f_fractional = f* × fraction
+
+Common fractions:
+  Full Kelly:    fraction = 1.0   (maximum growth, high variance)
+  Half Kelly:    fraction = 0.5   (lower variance, slower growth)
+  Quarter Kelly: fraction = 0.25  (conservative, minimal variance)
+
+Example:
+  f* = 0.265 (full Kelly)
+  f_half = 0.265 × 0.5 = 0.133 (13.3% half Kelly)
+  
+  With $5000 bankroll:
+  Full Kelly bet:  $1,325
+  Half Kelly bet:  $665
+  Quarter Kelly:   $331
+
+Recommendation: Use Half Kelly for NBA (reduces variance by 75%)
+
+--- Formula 1.3: Kelly with Multiple Outcomes ---
+
+For multi-way markets (moneyline, over/under):
+
+f* = Σ(p_i × b_i - 1) / b_i  for i = 1 to n
+
+Example: Three-way market
+  Outcome 1: p=0.45, b=1.2  → f_1 = 0.125
+  Outcome 2: p=0.35, b=2.5  → f_2 = 0.096  
+  Outcome 3: p=0.20, b=5.0  → f_3 = 0.000
+  
+  Total Kelly allocation: 22.1% across outcomes
+
+================================================================================
+SECTION 2: CONFIDENCE INTERVAL ADJUSTMENT
+================================================================================
+
+From: Conformal Prediction intervals (ML Research/Conformal folder)
+
+--- Formula 2.1: Interval Width to Confidence Factor ---
+
+confidence_factor = exp(-k × interval_width / reference_width)
+
+Where:
+  k = Sensitivity parameter (typically 0.5-1.0)
+  interval_width = upper - lower (from Conformal prediction)
+  reference_width = Typical width (e.g., 7.6 points for ±3.8)
+
+Example:
+  Narrow interval: [+13.0, +17.2], width = 4.2
+  Reference: 7.6
+  
+  confidence_factor = exp(-0.5 × 4.2 / 7.6)
+                    = exp(-0.276)
+                    = 0.759
+  
+  High confidence → Less reduction (75.9% of Kelly)
+
+Example:
+  Wide interval: [+5.0, +25.0], width = 20.0
+  
+  confidence_factor = exp(-0.5 × 20.0 / 7.6)
+                    = exp(-1.316)
+                    = 0.268
+  
+  Low confidence → Large reduction (26.8% of Kelly)
+
+--- Formula 2.2: Coverage Probability Adjustment ---
+
+From Conformal Prediction (95% coverage = 0.95):
+
+coverage_adjustment = coverage_probability
+
+Example:
+  95% coverage → multiply Kelly by 0.95
+  90% coverage → multiply Kelly by 0.90
+
+Combined adjustment:
+  f_final = f_kelly × confidence_factor × coverage_adjustment
+
+================================================================================
+SECTION 3: BLACK-SCHOLES VOLATILITY ADAPTATION
+================================================================================
+
+Original: Black, F., & Scholes, M. (1973). "The Pricing of Options and 
+Corporate Liabilities." Journal of Political Economy, 81(3), 637-654.
+
+--- Formula 3.1: Volatility Estimation ---
+
+Historical volatility (from ML predictions):
+
+σ = sqrt((1/(N-1)) × Σ(x_i - μ)²)
+
+Where:
+  x_i = ML predictions for game i
+  μ   = Mean of predictions
+  N   = Number of observations
+
+Example:
+  Last 10 ML predictions: [14.5, 15.2, 14.8, 15.1, 15.0, 14.7, 15.3, 14.9, 15.2, 15.0]
+  μ = 15.0
+  
+  Deviations: [-0.5, 0.2, -0.2, 0.1, 0.0, -0.3, 0.3, -0.1, 0.2, 0.0]
+  Squared: [0.25, 0.04, 0.04, 0.01, 0.00, 0.09, 0.09, 0.01, 0.04, 0.00]
+  
+  σ = sqrt(0.57 / 9) = sqrt(0.063) = 0.251 points
+
+--- Formula 3.2: Volatility Risk Factor ---
+
+volatility_risk_factor = 1 / (1 + λ × σ)
+
+Where:
+  λ = Risk aversion parameter (typically 1.0-2.0)
+  σ = Volatility (standard deviation)
+
+Example:
+  σ = 0.5 points (moderate volatility)
+  λ = 1.5 (moderate risk aversion)
+  
+  volatility_risk_factor = 1 / (1 + 1.5 × 0.5)
+                         = 1 / 1.75
+                         = 0.571
+  
+  Reduces bet size to 57.1% of Kelly
+
+--- Formula 3.3: Correlation-Adjusted Volatility ---
+
+When ML and market are correlated:
+
+σ_adjusted = σ × sqrt(1 - ρ²)
+
+Where:
+  ρ = Correlation coefficient between ML and market
+  
+Example:
+  σ_ml = 0.5
+  ρ = 0.85 (high correlation with market)
+  
+  σ_adjusted = 0.5 × sqrt(1 - 0.85²)
+             = 0.5 × sqrt(0.278)
+             = 0.5 × 0.527
+             = 0.264
+  
+  High correlation → Lower effective volatility → Can bet more
+
+================================================================================
+SECTION 4: RISK OF RUIN
+================================================================================
+
+--- Formula 4.1: Risk of Ruin Calculation ---
+
+R = ((1-p)/p)^(B/u)
+
+Where:
+  R = Probability of ruin (losing entire bankroll)
+  p = Win probability
+  B = Bankroll (in units)
+  u = Average bet size (in units)
+
+Example:
+  p = 0.65
+  Bankroll = $5000
+  Bet size = $400 per bet
+  Units: B/u = 5000/400 = 12.5 units
+  
+  R = ((1-0.65)/0.65)^12.5
+    = (0.538)^12.5
+    = 0.0008
+  
+  Risk of ruin: 0.08% (very safe)
+
+--- Formula 4.2: Maximum Drawdown Probability ---
+
+P(DD > x) = exp(-2x² / (σ²T))
+
+Where:
+  DD = Drawdown as fraction of bankroll
+  x  = Drawdown threshold
+  σ  = Volatility
+  T  = Time horizon (number of bets)
+
+Example:
+  σ = 0.15 (15% volatility per bet)
+  T = 100 bets
+  x = 0.20 (20% drawdown)
+  
+  P(DD > 0.20) = exp(-2 × 0.04 / (0.0225 × 100))
+               = exp(-0.036)
+               = 0.965
+  
+  96.5% chance of experiencing <20% drawdown over 100 bets
+
+================================================================================
+SECTION 5: EXPECTED GROWTH RATE
+================================================================================
+
+--- Formula 5.1: Logarithmic Growth (Kelly Optimality) ---
+
+G = p × log(1 + f×b) + (1-p) × log(1 - f)
+
+Where:
+  G = Expected logarithmic growth rate
+  f = Fraction of bankroll bet
+  b = Odds
+  p = Win probability
+
+Example:
+  p = 0.65, b = 0.909, f = 0.139 (Kelly fraction)
+  
+  G = 0.65 × log(1 + 0.139×0.909) + 0.35 × log(1 - 0.139)
+    = 0.65 × log(1.126) + 0.35 × log(0.861)
+    = 0.65 × 0.119 + 0.35 × (-0.150)
+    = 0.077 - 0.053
+    = 0.024
+  
+  Expected growth: 2.4% per bet (with Kelly sizing)
+
+Comparison:
+  Full Kelly (f=0.265):  G = 0.032 (3.2% growth, high variance)
+  Half Kelly (f=0.133):  G = 0.024 (2.4% growth, lower variance)
+  Quarter Kelly (f=0.066): G = 0.018 (1.8% growth, minimal variance)
+
+--- Formula 5.2: Compound Growth ---
+
+Final bankroll after N bets:
+
+B_final = B_initial × exp(G × N)
+
+Example:
+  Starting bankroll: $5,000
+  Growth rate: 2.4% per bet
+  Number of bets: 100
+  
+  B_final = $5,000 × exp(0.024 × 100)
+          = $5,000 × exp(2.4)
+          = $5,000 × 11.02
+          = $55,100
+  
+  Over 100 bets with 2.4% growth: 10x bankroll
+
+================================================================================
+SECTION 6: MULTIVARIATE KELLY (MULTIPLE SIMULTANEOUS BETS)
+================================================================================
+
+When betting on multiple games simultaneously:
+
+--- Formula 6.1: Covariance-Adjusted Kelly ---
+
+f_optimal = Σ^(-1) × (p - 1/b)
+
+Where:
+  Σ = Covariance matrix of outcomes
+  p = Vector of win probabilities
+  b = Vector of odds
+
+For independent bets (covariance = 0):
+  Simply sum individual Kelly fractions, cap at 100%
+
+For correlated bets (NBA games on same night):
+  Reduce allocation by correlation factor:
+  
+  f_adjusted = f_total / sqrt(1 + (n-1)×ρ)
+  
+  Where n = number of bets, ρ = average correlation
+
+Example:
+  3 games, each with f=0.10 (10%)
+  Total Kelly: 0.30 (30%)
+  Average correlation: 0.20
+  
+  f_adjusted = 0.30 / sqrt(1 + 2×0.20)
+             = 0.30 / sqrt(1.40)
+             = 0.30 / 1.183
+             = 0.254 (25.4%)
+  
+  Reduce from 30% to 25.4% due to correlation
+
+================================================================================
+SECTION 7: AMERICAN ODDS CONVERSIONS
+================================================================================
+
+--- Formula 7.1: American to Decimal Odds ---
+
+For negative odds (favorites):
+  decimal_odds = 1 + (100 / |odds|)
+  
+  Example: -110
+  decimal = 1 + (100/110) = 1.909
+
+For positive odds (underdogs):
+  decimal_odds = 1 + (odds / 100)
+  
+  Example: +150
+  decimal = 1 + (150/100) = 2.50
+
+--- Formula 7.2: American to Implied Probability ---
+
+For negative odds:
+  p_implied = |odds| / (|odds| + 100)
+  
+  Example: -110
+  p = 110 / 210 = 0.524 (52.4%)
+
+For positive odds:
+  p_implied = 100 / (odds + 100)
+  
+  Example: +150
+  p = 100 / 250 = 0.400 (40.0%)
+
+--- Formula 7.3: Vig (Overround) Calculation ---
+
+vig = (p_home + p_away) - 1
+
+Example:
+  LAL -110 → p = 0.524
+  BOS -110 → p = 0.524
+  
+  vig = 0.524 + 0.524 - 1 = 0.048 (4.8% vig)
+
+True probabilities (vig-adjusted):
+  p_true_home = p_home / (p_home + p_away)
+              = 0.524 / 1.048
+              = 0.500 (50%)
+
+================================================================================
+SECTION 8: CONFIDENCE INTERVAL TO PROBABILITY CONVERSION
+================================================================================
+
+From: Conformal Prediction (ML Research/Conformal folder)
+
+--- Formula 8.1: Interval to Win Probability ---
+
+Given ML interval [L, U] and market spread S:
+
+P(cover spread) = Φ((μ - S) / σ)
+
+Where:
+  μ = ML point forecast
+  σ = (U - L) / (2 × z_α)  (estimated std dev)
+  z_α = 1.96 for 95% CI
+  Φ = Standard normal CDF
+
+Example:
+  ML: +15.1 [+11.3, +18.9]
+  Market spread: -7.5
+  
+  σ = (18.9 - 11.3) / (2 × 1.96)
+    = 7.6 / 3.92
+    = 1.939
+  
+  P(LAL covers -7.5) = Φ((15.1 - (-7.5)) / 1.939)
+                     = Φ(22.6 / 1.939)
+                     = Φ(11.66)
+                     ≈ 1.000 (>99.9%)
+  
+  Very high probability LAL covers!
+
+--- Formula 8.2: Conservative Probability (Accounting for Uncertainty) ---
+
+Use lower bound of ML interval for conservative estimate:
+
+P_conservative = Φ((L - S) / σ)
+
+Example:
+  L = 11.3 (lower bound)
+  S = -7.5 (market spread)
+  
+  P_conservative = Φ((11.3 - (-7.5)) / 1.939)
+                 = Φ(18.8 / 1.939)
+                 = Φ(9.70)
+                 ≈ 1.000
+  
+  Even conservative estimate shows >99% probability
+
+Practical adjustment:
+  Use 70-80% of calculated probability to account for model uncertainty
+
+================================================================================
+SECTION 9: EXPECTED VALUE (EV)
+================================================================================
+
+--- Formula 9.1: Expected Value ---
+
+EV = (P_win × Win_amount) - (P_loss × Loss_amount)
+
+Example:
+  Bet: $400 on LAL -110
+  P_win = 0.65 (from ML)
+  P_loss = 0.35
+  
+  Win_amount = $400 × (100/110) = $363.64
+  Loss_amount = $400
+  
+  EV = (0.65 × $363.64) - (0.35 × $400)
+     = $236.36 - $140.00
+     = $96.36
+  
+  Positive EV! Expected profit of $96.36 per $400 bet
+
+--- Formula 9.2: EV per Dollar Wagered ---
+
+EV_per_dollar = EV / Bet_size
+
+Example:
+  EV = $96.36
+  Bet = $400
+  
+  EV_per_dollar = $96.36 / $400 = 0.241
+  
+  Expect to profit $0.24 per $1 wagered (24.1% ROI)
+
+================================================================================
+SECTION 10: BANKROLL GROWTH SIMULATION
+================================================================================
+
+--- Formula 10.1: Geometric Mean Return ---
+
+GM = (Π(1 + r_i))^(1/N) - 1
+
+Where:
+  r_i = Return on bet i (can be positive or negative)
+  N = Number of bets
+  Π = Product
+
+Example (5 bets):
+  Bet 1: +10% → 1.10
+  Bet 2: -8%  → 0.92
+  Bet 3: +12% → 1.12
+  Bet 4: +15% → 1.15
+  Bet 5: -5%  → 0.95
+  
+  GM = (1.10 × 0.92 × 1.12 × 1.15 × 0.95)^(1/5) - 1
+     = (1.290)^0.20 - 1
+     = 1.052 - 1
+     = 0.052 (5.2% per bet)
+
+--- Formula 10.2: Bankroll After N Bets ---
+
+B_N = B_0 × (1 + GM)^N
+
+Example:
+  Starting: $5,000
+  Geometric mean: 5.2% per bet
+  Number of bets: 50
+  
+  B_50 = $5,000 × (1.052)^50
+       = $5,000 × 12.55
+       = $62,750
+  
+  12.5x growth over 50 bets
+
+================================================================================
+SECTION 11: VOLATILITY-ADJUSTED POSITION SIZING
+================================================================================
+
+From: Black-Scholes volatility framework
+
+--- Formula 11.1: Standard Deviation of Returns ---
+
+σ_returns = sqrt(p×(1+b)² + (1-p)×(-1)² - μ²)
+
+Where:
+  μ = Expected return = p×(1+b) - (1-p)
+
+Example:
+  p = 0.65, b = 0.909
+  
+  μ = 0.65×1.909 - 0.35 = 1.241 - 0.35 = 0.891
+  
+  σ_returns = sqrt(0.65×3.644 + 0.35×1 - 0.794)
+            = sqrt(2.369 + 0.35 - 0.794)
+            = sqrt(1.925)
+            = 1.388 (138.8% volatility per bet)
+
+--- Formula 11.2: Sharpe Ratio ---
+
+Sharpe = (Expected_Return - Risk_Free_Rate) / σ_returns
+
+Example:
+  Expected return: 89.1% per bet
+  Risk-free rate: 0% (short-term)
+  Volatility: 138.8%
+  
+  Sharpe = 0.891 / 1.388 = 0.642
+  
+  Positive Sharpe ratio indicates favorable risk-adjusted returns
+
+--- Formula 11.3: Volatility-Adjusted Kelly ---
+
+f_volatility_adjusted = f_kelly × (target_sharpe / actual_sharpe)
+
+Example:
+  f_kelly = 0.265
+  Actual Sharpe = 0.642
+  Target Sharpe = 1.0 (conservative)
+  
+  f_adjusted = 0.265 × (1.0 / 0.642)
+             = 0.265 × 1.558
+             = 0.413
+  
+  Can increase bet size when Sharpe ratio is good
+
+================================================================================
+SECTION 12: FINAL BET SIZE CALCULATION
+================================================================================
+
+--- Formula 12.1: Composite Bet Sizing ---
+
+Combining all factors:
+
+f_final = f_kelly × confidence_factor × coverage_adjustment × volatility_factor × fraction
+
+Example (Complete calculation):
+  Step 1: Kelly fraction
+    p = 0.65, b = 0.909
+    f_kelly = 0.265
+  
+  Step 2: Confidence adjustment
+    interval_width = 7.6
+    confidence_factor = 0.759
+  
+  Step 3: Coverage adjustment
+    coverage_adjustment = 0.95
+  
+  Step 4: Volatility adjustment
+    volatility_factor = 0.571
+  
+  Step 5: Fractional Kelly (use half)
+    fraction = 0.50
+  
+  f_final = 0.265 × 0.759 × 0.95 × 0.571 × 0.50
+          = 0.0545 (5.45% of bankroll)
+  
+  Bet size = $5,000 × 0.0545 = $272.50
+
+--- Formula 12.2: Position Limits ---
+
+Apply hard limits:
+
+bet_size_final = min(bet_size_calculated, max_bet_size)
+
+Where:
+  max_bet_size = min(
+    0.20 × bankroll,           # Never more than 20% on single bet
+    0.50 × bankroll × f_kelly   # Never more than 50% of full Kelly
+  )
+
+Example:
+  Calculated: $272.50
+  Max 20%: $1,000
+  Max 50% Kelly: $662.50
+  
+  bet_size_final = min($272.50, $1,000, $662.50)
+                 = $272.50
+  
+  Use calculated size (within all limits)
+
+================================================================================
+SECTION 13: PERFORMANCE METRICS
+================================================================================
+
+--- Metric 13.1: Return on Investment (ROI) ---
+
+ROI = (Final_Bankroll - Initial_Bankroll) / Initial_Bankroll
+
+--- Metric 13.2: Sharpe Ratio ---
+
+Sharpe = (Average_Return - Risk_Free) / Std_Dev_Returns
+
+--- Metric 13.3: Maximum Drawdown ---
+
+MaxDD = max(Peak - Trough) / Peak
+
+--- Metric 13.4: Win Rate ---
+
+Win_Rate = Wins / Total_Bets
+
+--- Metric 13.5: Average Bet Size ---
+
+Avg_Bet = Σ(bet_sizes) / N
+
+--- Metric 13.6: Profit Factor ---
+
+Profit_Factor = Gross_Profit / Gross_Loss
+
+Target: >1.5 (each dollar lost generates >$1.50 profit)
+
+================================================================================
+SECTION 14: COMPUTATIONAL PERFORMANCE
+================================================================================
+
+All calculations must be real-time (<20ms total):
+
+Operation                           Complexity    Time Target
+──────────────────────────────────────────────────────────────
+American odds → Decimal             O(1)          <0.1ms
+American odds → Implied prob        O(1)          <0.1ms
+Kelly fraction calculation          O(1)          <1ms
+Confidence adjustment               O(1)          <2ms
+Volatility calculation              O(N)          <5ms (N≤100)
+Correlation calculation             O(N)          <5ms
+Risk of ruin                        O(1)          <1ms
+Expected value                      O(1)          <0.5ms
+Final bet size (composite)          O(1)          <2ms
+──────────────────────────────────────────────────────────────
+TOTAL                                             <20ms
+
+Result: Real-time risk optimization without slowing 5-second cycle
+
+================================================================================
+END OF MATHEMATICAL FOUNDATIONS
+================================================================================
+
+Summary Formulas:
+1. Kelly Criterion: f* = (p(b+1) - 1) / b
+2. Fractional Kelly: f_frac = f* × 0.5 (use half Kelly)
+3. Confidence adjustment: × exp(-k × width / ref_width)
+4. Volatility adjustment: × (1 / (1 + λσ))
+5. Final bet size: B × f_final (with hard limits)
+
+Performance: All calculations <20ms (real-time compatible)
+
+Applied to NBA betting with $5,000 bankroll:
+- Typical bet size: $200-500 (4-10% of bankroll)
+- Conservative approach: Half Kelly + all adjustments
+- Expected growth: 2-3% per bet (with positive edge)
+- Risk of ruin: <0.1% (very safe)
+
+Ready for implementation in Applied Model/ folder.
+

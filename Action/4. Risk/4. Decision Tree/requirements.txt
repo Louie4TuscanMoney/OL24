@@ -1,0 +1,5 @@
+# Decision Tree System Dependencies
+# Following: DECISION_TREE/Applied Model/
+
+numpy>=1.24.0
+

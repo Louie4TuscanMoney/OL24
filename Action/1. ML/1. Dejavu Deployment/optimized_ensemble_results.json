@@ -1,0 +1,29 @@
+{
+  "optimal_weights": {
+    "dejavu_weight": 0.05,
+    "lstm_weight": 0.95,
+    "val_mae": 4.9737415718754345
+  },
+  "test_performance": {
+    "ensemble": {
+      "mae": 5.236242855389468,
+      "rmse": 6.550293123326444,
+      "median_error": 4.492599046230316
+    },
+    "dejavu": {
+      "mae": 6.166853303471445,
+      "rmse": 7.748243307750669
+    },
+    "lstm": {
+      "mae": 5.237588540170121,
+      "rmse": 6.554789848706577
+    },
+    "weights": {
+      "dejavu": 0.05,
+      "lstm": 0.95
+    }
+  },
+  "research_default_test_mae": 5.385418280802274,
+  "optimized_test_mae": 5.236242855389468,
+  "improvement_percent": 2.769987726758023
+}

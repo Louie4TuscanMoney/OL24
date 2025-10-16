@@ -1,0 +1,219 @@
+INFORMER: MATHEMATICAL BREAKDOWN
+================================================================================
+Source: Zhou et al., "Informer: Beyond Efficient Transformer for Long Sequence 
+Time-Series Forecasting", AAAI 2021
+
+PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+Task: Long Sequence Time-Series Forecasting (LSTF)
+Given: Historical sequence X^t = {x_1^t, ..., x_{Lx}^t | x_i^t ∈ ℝ^{dx}} at time t
+Predict: Future sequence Y^t = {y_1^t, ..., y_{Ly}^t | y_i^t ∈ ℝ^{dy}}
+
+Core Challenge: Vanilla Transformers have THREE limitations for LSTF:
+1. Quadratic computation of self-attention: O(L²) time and memory per layer
+2. Memory bottleneck in stacking layers: O(J·L²) for J layers
+3. Speed plunge in predicting long outputs: Step-by-step decoding is slow
+
+
+CORE MATHEMATICAL INNOVATIONS
+================================================================================
+
+1. PROBSPARSE SELF-ATTENTION
+--------------------------------------------------------------------------------
+
+Standard Self-Attention (Vanilla Transformer):
+    A(Q, K, V) = Softmax(QK^T/√d) · V
+    Complexity: O(L² · d)
+
+Problem: All queries attend to all keys → quadratic complexity
+
+Sparsity Measure (Query Sparsity):
+    M(q_i, K) = ln Σ_j exp(q_i·k_j^T/√d) - (1/L_k)Σ_j(q_i·k_j^T/√d)
+    
+    Where:
+    - M(q_i, K) = sparsity score for query q_i
+    - First term = log-sum-exp (dominance of top keys)
+    - Second term = arithmetic mean
+    - High M → query attends to few dominant keys (sparse)
+    - Low M → query distributes attention uniformly (dense)
+
+ProbSparse Attention:
+    Select top-u queries with highest M values:
+    Q̄ = {q_i | i ∈ Top-u(M(q_i, K))}
+    
+    A(Q, K, V) = Softmax(Q̄K^T/√d) · V
+    
+    Where u = c · ln L_Q with c = sampling factor (typically 5)
+    
+    Complexity: O(L ln L) in expectation
+
+Practical Implementation (Max-Mean Measurement):
+    M̂(q_i, K) = max_j(q_i·k_j^T/√d) - (1/L_k)Σ_j(q_i·k_j^T/√d)
+    
+    Approximates KL divergence without computing full softmax
+
+
+2. SELF-ATTENTION DISTILLING
+--------------------------------------------------------------------------------
+
+Objective: Reduce sequence length progressively through layers
+
+Distilling Operation:
+    X_{j+1}^t = MaxPool(ELU(Conv1d([X_j^t]_AB)))
+    
+    Where:
+    - [X_j^t]_AB = output from attention block and feed-forward at layer j
+    - Conv1d = 1D convolution with kernel size 3
+    - ELU = Exponential Linear Unit activation
+    - MaxPool = max pooling with stride 2
+    
+    Result: Each distilling layer halves the sequence length
+    
+    Sequence length progression:
+    L → ⌊L/2⌋ → ⌊L/4⌋ → ... → ⌊L/2^n⌋
+    
+    Total layers with distilling: n = ⌊log_2 L⌋
+
+
+3. ENCODER-DECODER ARCHITECTURE
+--------------------------------------------------------------------------------
+
+Encoder Input:
+    X_en^t = {x_1^t, ..., x_{L_x}^t} (historical sequence)
+    
+    Embedding: X_feed = Scalar(x) + PositionalEncoding(t) + TemporalEncoding(stamp)
+
+Decoder Input (Generative Style):
+    X_de^t = Concat[X_{token}^t, X_0^t]
+    
+    Where:
+    - X_{token}^t = {x_{L_x-L_{token}+1}^t, ..., x_{L_x}^t} (start token from history)
+    - X_0^t = {0, ..., 0} (zero placeholder for predictions)
+    - Length: L_{token} + L_y
+
+Decoder Output:
+    Single forward pass → entire prediction sequence
+    No dynamic decoding required → O(1) inference passes
+
+
+4. POSITIONAL & TEMPORAL ENCODING
+--------------------------------------------------------------------------------
+
+Fixed Positional Encoding (Vaswani et al.):
+    PE(pos, 2i) = sin(pos/10000^(2i/d_model))
+    PE(pos, 2i+1) = cos(pos/10000^(2i/d_model))
+
+Learnable Temporal Encoding:
+    Encodes time stamps at multiple scales:
+    - Minute-of-hour: 4 bins
+    - Hour-of-day: 24 bins
+    - Day-of-week: 7 bins
+    - Day-of-month: 31 bins
+    - Day-of-year: 366 bins
+    - Month-of-year: 12 bins
+    
+    Each encoded as learnable embedding → concatenated or added
+
+
+LOSS FUNCTION
+--------------------------------------------------------------------------------
+
+Mean Squared Error:
+    L = (1/L_y)Σ_{i=1}^{L_y} (ŷ_i - y_i)²
+    
+    Where:
+    - ŷ_i = predicted value at step i
+    - y_i = ground truth at step i
+
+
+COMPLEXITY ANALYSIS
+================================================================================
+
+Time Complexity per Layer:
+    Vanilla Transformer: O(L² · d)
+    Informer: O(L ln L · d)
+
+Space Complexity:
+    Vanilla Transformer: O(L² · E) where E = number of encoder layers
+    Informer: O(L (ln L + E))
+
+Memory Footprint (Encoder):
+    With J stacked attention blocks and distilling:
+    O(L · d · Σ_{j=1}^J (1/2^{j-1})) = O(2Ld) = O(Ld)
+
+Total Parameters:
+    Comparable to vanilla transformer but with better efficiency
+
+
+KEY MATHEMATICAL PROPERTIES
+================================================================================
+
+1. Sparsity Assumption:
+   Time-series self-attention patterns are naturally sparse
+   → Most queries only need to attend to few keys
+
+2. Dominant Query Selection:
+   By selecting only queries with high sparsity scores:
+   → Preserves most important attention patterns
+   → Reduces redundant computation
+
+3. Progressive Dimension Reduction:
+   Distilling + ProbSparse → stack more layers efficiently
+   → Capture longer-range dependencies
+
+4. One-Shot Prediction:
+   Generative decoder → entire sequence predicted at once
+   → Avoids error accumulation from autoregressive decoding
+
+
+IMPLEMENTATION DETAILS (FROM PAPER)
+================================================================================
+
+Architecture (As Used in Experiments):
+- Encoder: 3-layer main stack + 1-layer stack (1/4 input) - pyramid structure
+- Decoder: 2 layers
+- Batch size: 32
+- Sampling factor c: 5 (verified optimal in Fig. 4b of paper)
+
+Hyperparameters (From Paper):
+- Optimizer: Adam
+- Learning rate: 1e-4, decaying 0.5× smaller every epoch
+- Total epochs: 8 with early stopping
+- Input normalization: Zero-mean normalized
+- Loss: MSE on prediction w.r.t. target sequences
+
+Hardware (From Paper):
+- Platform: Single Nvidia V100 32GB GPU
+- All experiments tractable on one GPU
+
+
+EXPERIMENTAL RESULTS (FROM PAPER)
+================================================================================
+
+Datasets (From Zhou et al. AAAI 2021):
+- ETTh1, ETTh2: Electricity Transformer Temperature (hourly), 6 features + target "oil temperature"
+  Train/Val/Test split: 12/4/4 months
+- ETTm1: Same as above but 15-minute granularity
+- ECL: Electricity Consuming Load (321 clients, hourly), 2 years
+  Train/Val/Test split: 15/3/4 months  
+- Weather: Local climatological data (1,600 US locations, hourly), 4 years (2010-2013)
+  11 climate features + target "wet bulb", Train/Val/Test: 28/10/10 months
+
+Univariate Results - ETTh1 (MSE):
+- Horizon 48:  Informer 0.239 vs LSTM 0.493 vs ARIMA 0.879
+- Horizon 168: Informer 0.447 vs LSTM 0.723 vs ARIMA 1.032  
+- Horizon 336: Informer 0.489 vs LSTM 1.212 vs ARIMA 1.136
+- Horizon 720: Informer 0.540 vs LSTM 1.511 vs ARIMA 1.251
+
+Winning Count: Informer wins 32/44 comparisons, Informer† (canonical attention) wins 12/44
+
+Key Findings from Paper:
+- MSE decrease vs LSTM: 26.8% (at 168), 52.4% (at 336), 60.1% (at 720)
+- MSE decrease vs ARIMA/Prophet: 49.3% (at 168), 61.1% (at 336), 65.1% (at 720) average
+- Multivariate MSE decrease vs LSTnet: 26.6% (at 168), 28.2% (at 336), 34.3% (at 720)
+
+Ablation Studies:
+- ProbSparse alone enables input lengths up to 1440 (Informer† with canonical attention OOMs)
+- Distilling alone allows 1200-length inputs (Informer‡ without distilling OOMs at 720)
+- Generative decoder maintains performance with prediction offsets (+72 steps tested)
+

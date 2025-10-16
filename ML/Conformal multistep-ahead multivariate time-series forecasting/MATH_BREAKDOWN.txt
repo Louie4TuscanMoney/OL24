@@ -1,0 +1,506 @@
+CONFORMAL PREDICTION: MATHEMATICAL BREAKDOWN
+================================================================================
+Source: Schlembach et al., "Conformal Multistep-Ahead Multivariate Time-Series
+Forecasting", Proceedings of Machine Learning Research 179:1-3, 2022
+
+AUTHORS: Filip Schlembach (Maastricht), Evgueni Smirnov (Maastricht), 
+         Irena Koprinska (Sydney)
+
+PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+Task: Multistep-Ahead Multivariate Time Series Forecasting with Uncertainty
+
+Given: Time series observations o_j ∈ ℝ^d for j = 1,...,t
+Goal: Predict o_j for j = t+1,...,t+h (h steps ahead, d dimensions)
+      with prediction intervals having coverage guarantee
+
+Challenge: Time series violates exchangeability assumption
+- Temporal dependence between observations
+- Distribution shifts over time (as shown in ELEC2 dataset experiments)
+- Need adaptive weighting to minimize coverage loss
+
+
+CORE MATHEMATICAL FRAMEWORK
+================================================================================
+
+1. STANDARD CONFORMAL PREDICTION (EXCHANGEABLE CASE)
+--------------------------------------------------------------------------------
+
+Nonconformity Score:
+    s_i = |y_i - f̂(x_i)|
+    
+    Where f̂ trained on all data except (x_i, y_i)
+
+Prediction Region (Interval):
+    C(x_{n+1}) = [f̂(x_{n+1}) - q_{1-α}, f̂(x_{n+1}) + q_{1-α}]
+    
+    Where q_{1-α} = quantile_{1-α}({s_1, s_2, ..., s_n})
+
+Coverage Guarantee (Exchangeable):
+    P(y_{n+1} ∈ C(x_{n+1})) ≥ 1 - α
+    
+    Holds exactly under exchangeability assumption
+
+
+2. SPLIT CONFORMAL PREDICTION
+--------------------------------------------------------------------------------
+
+Split Data:
+    Training set: D_train = {(x_i, y_i)}_{i=1}^m
+    Calibration set: D_cal = {(x_i, y_i)}_{i=m+1}^n
+
+Algorithm:
+    Step 1: Train f̂ on D_train only
+    Step 2: Compute scores on D_cal:
+        s_i = |y_i - f̂(x_i)| for i = m+1, ..., n
+    Step 3: Quantile:
+        q̃ = ⌈(1-α)(n-m+1)⌉-th smallest score in {s_{m+1}, ..., s_n}
+    Step 4: Prediction set:
+        C(x_{test}) = [f̂(x_{test}) - q̃, f̂(x_{test}) + q̃]
+
+Coverage Guarantee:
+    P(y_{test} ∈ C(x_{test})) ≥ 1 - α
+    
+    Exact coverage under exchangeability
+
+
+3. TIME SERIES CHALLENGES
+--------------------------------------------------------------------------------
+
+Exchangeability Violation:
+    y_t and y_s NOT exchangeable for t ≠ s
+    → Standard conformal guarantees don't hold
+
+Temporal Dependence:
+    Correlation structure: Cov(y_t, y_s) ≠ 0 for |t-s| > 0
+    
+β-Mixing Condition (Weak Dependence):
+    β(m) = sup_{t} sup_{A ∈ σ(y_1,...,y_t), B ∈ σ(y_{t+m},...)} |P(A∩B) - P(A)P(B)|
+    
+    Assumption: β(m) → 0 as m → ∞ (mixing)
+    
+    Rate: β(m) ≤ C·m^{-γ} for some γ > 0
+
+Modified Coverage Guarantee:
+    |P(y_{n+1} ∈ C(x_{n+1})) - (1-α)| ≤ O(1/√n + β(m))
+    
+    Where:
+    - n = calibration set size
+    - m = mixing lag
+    - Coverage error decreases with n
+
+
+4. NONEXCHANGEABLE MULTISTEP CONFORMAL (nmtCP)
+--------------------------------------------------------------------------------
+
+Multistep Forecast Horizon:
+    Predict h steps ahead: ŷ_{t+1:t+h} = (ŷ_{t+1}, ..., ŷ_{t+h})
+    True values: y_{t+1:t+h} = (y_{t+1}, ..., y_{t+h})
+
+Nonconformity Score (Max Norm):
+    s_t^{(h)} = max_{j=1,...,h} |y_{t+j} - ŷ_{t+j}|
+    
+    Alternative (L2 Norm):
+    s_t^{(h)} = √(Σ_{j=1}^h (y_{t+j} - ŷ_{t+j})²)
+
+Prediction Region (Multivariate):
+    C_t^{(h)} = {(y_{t+1}, ..., y_{t+h}) : max_j |y_{t+j} - ŷ_{t+j}| ≤ q̃_{1-α}}
+    
+    Hypercube centered at point forecast
+
+Coverage (Simultaneous):
+    P(y_{t+1:t+h} ∈ C_t^{(h)}) ≥ 1 - α - O(1/√n + β(m))
+
+
+5. ADAPTIVE/WEIGHTED CONFORMAL FOR NON-STATIONARITY
+--------------------------------------------------------------------------------
+
+Time-Weighted Scores:
+    w_t = exp(-λ(n-t))  or  w_t = exp(-(n-t)²/(2τ²))
+    
+    Where:
+    - λ, τ = decay parameters
+    - Recent observations weighted more heavily
+
+Weighted Quantile:
+    q̃_{1-α}^w = inf{q : Σ_{i=1}^n w_i·𝟙{s_i ≤ q} ≥ (1-α)·Σ_{i=1}^n w_i}
+
+Adaptive Prediction Region:
+    C_t^{(h)} = [ŷ_{t+j} - q̃_{1-α}^w, ŷ_{t+j} + q̃_{1-α}^w]  for j=1,...,h
+
+Properties:
+    - Adapts to distribution shift
+    - Tracks non-stationarity
+    - Coverage maintained approximately
+
+
+6. MULTIVARIATE TIME SERIES
+--------------------------------------------------------------------------------
+
+Multivariate Forecast:
+    ŷ_{t+1:t+h} ∈ ℝ^{h×d}  where d = number of features
+    
+Joint Nonconformity Score:
+    s_t^{joint} = max_{j=1,...,h} max_{k=1,...,d} |y_{t+j,k} - ŷ_{t+j,k}|
+    
+    → Single quantile for all dimensions
+
+Marginal Nonconformity Scores:
+    s_t^{(k)} = max_{j=1,...,h} |y_{t+j,k} - ŷ_{t+j,k}|  for k=1,...,d
+    
+    → Separate quantile per feature
+
+Joint Prediction Region:
+    C_t^{joint} = {y : max_{j,k} |y_{j,k} - ŷ_{t+j,k}| ≤ q̃^{joint}}
+    
+    Coverage: P(y_{t+1:t+h} ∈ C_t^{joint}) ≥ 1 - α
+
+Marginal Prediction Regions:
+    C_t^{(k)} = {y_k : max_j |y_{j,k} - ŷ_{t+j,k}| ≤ q̃^{(k)}}  for each k
+    
+    Coverage (per feature): P(y_{t+1:t+h,k} ∈ C_t^{(k)}) ≥ 1 - α
+
+Bonferroni Correction (Simultaneous Coverage):
+    Use α_k = α/d for each marginal region
+    
+    → P(∀k: y_{t+1:t+h,k} ∈ C_t^{(k)}) ≥ 1 - α
+
+
+ALGORITHMS
+================================================================================
+
+ALGORITHM 1: Split Conformal for Time Series
+--------------------------------------------------------------------------------
+Input: Calibration set {(x_t, y_{t+1:t+h})}_{t=1}^n, model f̂, α ∈ (0,1)
+Output: Prediction function with intervals
+
+1. FOR t = 1 to n DO:
+     ŷ_{t+1:t+h} = f̂(x_t)
+     s_t = max_{j=1,...,h} |y_{t+j} - ŷ_{t+j}|
+   END FOR
+
+2. Sort scores: s_{(1)} ≤ s_{(2)} ≤ ... ≤ s_{(n)}
+
+3. Compute quantile index: k = ⌈(1-α)(n+1)⌉
+
+4. Set q̃ = s_{(k)}
+
+5. PREDICT(x_test):
+     ŷ = f̂(x_test)
+     RETURN [ŷ_j - q̃, ŷ_j + q̃] for j=1,...,h
+
+Complexity: O(n·h) for calibration, O(1) for prediction
+
+
+ALGORITHM 2: Adaptive Weighted Conformal
+--------------------------------------------------------------------------------
+Input: Calibration set, model f̂, α, decay τ
+Output: Adaptive prediction intervals
+
+1. FOR t = 1 to n DO:
+     s_t = max_{j=1,...,h} |y_{t+j} - f̂(x_t)_j|
+     w_t = exp(-(n-t)²/(2τ²))
+   END FOR
+
+2. Compute weighted quantile:
+     sorted_idx = argsort(s)
+     cum_weights = cumsum(w[sorted_idx])
+     total_weight = sum(w)
+     k = argmin{cum_weights ≥ (1-α)·total_weight}
+     q̃_w = s[sorted_idx[k]]
+
+3. PREDICT(x_test):
+     ŷ = f̂(x_test)
+     RETURN [ŷ_j - q̃_w, ŷ_j + q̃_w] for j=1,...,h
+
+Adaptation: Recent errors weighted more → handles drift
+
+
+ALGORITHM 3: Multivariate Conformal (Marginal)
+--------------------------------------------------------------------------------
+Input: Calibration set, model f̂, α, d features
+Output: Per-feature prediction intervals
+
+1. FOR k = 1 to d DO:  # For each feature
+     FOR t = 1 to n DO:
+       s_t^{(k)} = max_{j=1,...,h} |y_{t+j,k} - f̂(x_t)_{j,k}|
+     END FOR
+     q̃^{(k)} = quantile_{1-α}({s_1^{(k)}, ..., s_n^{(k)}})
+   END FOR
+
+2. PREDICT(x_test):
+     ŷ = f̂(x_test)  # Shape: (h, d)
+     FOR k = 1 to d DO:
+       interval_k = [ŷ_{j,k} - q̃^{(k)}, ŷ_{j,k} + q̃^{(k)}] for j=1,...,h
+     END FOR
+     RETURN intervals for all features
+
+Efficiency: Different interval widths per feature
+
+
+THEORETICAL RESULTS
+================================================================================
+
+1. FINITE-SAMPLE COVERAGE GUARANTEE
+--------------------------------------------------------------------------------
+
+Theorem (Exact Coverage - Exchangeable):
+    Under exchangeability, for any α ∈ (0,1):
+    
+    P(y_{n+1} ∈ C(x_{n+1})) ≥ 1 - α
+    
+    with equality if ties have probability 0.
+
+Proof Sketch:
+    Augmented sequence z_1, ..., z_n, z_{n+1} is exchangeable
+    → Rank of z_{n+1} is uniform over {1, ..., n+1}
+    → P(rank > ⌈(1-α)(n+1)⌉) ≤ α
+
+
+2. APPROXIMATE COVERAGE - TIME SERIES
+--------------------------------------------------------------------------------
+
+Theorem (β-Mixing):
+    Under β-mixing with β(m) ≤ C·m^{-γ}, if n, m → ∞:
+    
+    |P(y_{n+1} ∈ C(x_{n+1})) - (1-α)| ≤ A/√n + B·β(m)
+    
+    Where A, B are constants depending on score distribution.
+
+Implication:
+    - Large calibration set (n) → better coverage
+    - Fast mixing (large γ) → better coverage
+    - Tradeoff: larger m reduces β(m) but needs larger n
+
+
+3. INTERVAL WIDTH ANALYSIS
+--------------------------------------------------------------------------------
+
+Expected Interval Width:
+    E[width(C)] = 2·E[q̃_{1-α}] ≈ 2·quantile_{1-α}(|ε|)
+    
+    Where ε = prediction error distribution
+
+Efficiency:
+    Informally efficient if width ≈ 2·quantile_{1-α} of error distribution
+    → Adaptive weighting improves efficiency under drift
+
+Conditional Coverage:
+    Ideally: P(y ∈ C | x) ≥ 1 - α for all x
+    Split conformal: Only marginal coverage (averaged over x)
+    → Need full conformal or localized methods for conditional
+
+
+PRACTICAL CONSIDERATIONS
+================================================================================
+
+1. CALIBRATION SET SIZE
+--------------------------------------------------------------------------------
+
+Minimum Samples:
+    n_cal ≥ 1/(2α²) for α-level coverage with high confidence
+    
+    Example: α = 0.1 → need n_cal ≥ 50
+
+Recommended:
+    n_cal ≥ 1000 for stable quantile estimation
+    Larger for multivariate (d features) → need d·1000
+
+Data Split:
+    Train: 60%, Validation: 10%, Calibration: 15%, Test: 15%
+
+
+2. SCORE FUNCTION CHOICES
+--------------------------------------------------------------------------------
+
+Absolute Error:
+    s = |y - ŷ|
+    → Symmetric intervals
+
+Quantile Score:
+    s_α(y, ŷ) = (α - 𝟙{y < ŷ})·(y - ŷ)
+    → Asymmetric intervals (e.g., for skewed distributions)
+
+Normalized Score:
+    s = |y - ŷ| / σ̂(x)
+    Where σ̂(x) = estimated prediction variance
+    → Adaptive interval width based on uncertainty
+
+CQR (Conformalized Quantile Regression):
+    s = max(q_low - y, y - q_high)
+    Where q_low, q_high from quantile regression
+    → More efficient than absolute error
+
+
+3. HYPERPARAMETER TUNING
+--------------------------------------------------------------------------------
+
+Significance Level α:
+    Common choices: 0.05, 0.1, 0.2
+    Higher α → narrower intervals, lower coverage
+
+Decay Parameter τ (Adaptive):
+    τ = n/10: Heavy weighting of recent data
+    τ = n/5: Moderate adaptation
+    τ = n/2: Slow adaptation
+    
+    Tune via cross-validation on coverage + width tradeoff
+
+Horizon h:
+    Longer h → wider intervals (accumulating uncertainty)
+    May need h-dependent α: α_h = α·√h (heuristic)
+
+
+4. ONLINE RECALIBRATION
+--------------------------------------------------------------------------------
+
+Rolling Window:
+    Maintain last W observations for calibration
+    Recompute q̃ every K predictions
+    
+    W = 500-1000 typical
+    K = 10-100 typical
+
+Sequential Update:
+    Add new (y_true, ŷ) to calibration set
+    Remove oldest observation
+    → Efficient online quantile tracking algorithms
+
+Trigger Recalibration When:
+    - Coverage drops below (1-α) - δ
+    - Interval widths increase significantly
+    - Detected distribution shift
+
+
+IMPLEMENTATION FORMULAS
+================================================================================
+
+Weighted Quantile (Efficient):
+--------------------------------------------------------------------------------
+Given: scores s_1, ..., s_n with weights w_1, ..., w_n
+
+1. sorted_idx = argsort(s)
+2. s_sorted = s[sorted_idx]
+3. w_sorted = w[sorted_idx]
+4. cum_weights = cumsum(w_sorted)
+5. total_weight = sum(w)
+6. threshold = (1-α)·total_weight
+7. k = argmin{cum_weights[i] ≥ threshold}
+8. q̃ = s_sorted[k]
+
+
+Exponential Decay Weights:
+--------------------------------------------------------------------------------
+For observation at time t, current time T:
+
+Linear decay:
+    w_t = exp(-λ(T-t))  where λ = 1/τ
+
+Gaussian decay:
+    w_t = exp(-(T-t)²/(2τ²))
+
+Polynomial decay:
+    w_t = (1 + (T-t))^{-γ}  where γ > 0
+
+
+Bootstrap Conformal (Computational):
+--------------------------------------------------------------------------------
+For computational stability with small calibration sets:
+
+1. FOR b = 1 to B DO:
+     Sample n observations with replacement
+     Compute q̃_b on bootstrap sample
+   END FOR
+
+2. q̃_final = median({q̃_1, ..., q̃_B})
+
+Reduces variance of quantile estimate
+
+
+COMPLEXITY SUMMARY
+================================================================================
+
+Operation              | Time Complexity | Space Complexity
+-----------------------|-----------------|------------------
+Calibration (n samples)| O(n·h·d)       | O(n)
+Quantile computation   | O(n log n)      | O(n)
+Single prediction      | O(h·d)          | O(h·d)
+Weighted quantile      | O(n log n)      | O(n)
+Online update          | O(log n)        | O(n)
+
+Where:
+- n = calibration set size
+- h = forecast horizon
+- d = number of features
+
+
+COMPARISON: CONFORMAL vs BAYESIAN UNCERTAINTY
+================================================================================
+
+Conformal Prediction:
++ Finite-sample guarantees (not asymptotic)
++ Model-agnostic (works with any f̂)
++ No assumptions on data distribution
++ Computationally cheap (just quantile)
+- Only marginal coverage (not conditional)
+- Requires held-out calibration set
+- Intervals may be conservative
+
+Bayesian Methods:
++ Conditional coverage P(y|x)
++ Full posterior distribution
++ Principled uncertainty quantification
+- Requires model specification (priors)
+- Computationally expensive (sampling)
+- Asymptotic guarantees only
+- Model misspecification issues
+
+
+KEY MATHEMATICAL PROPERTIES
+================================================================================
+
+1. Distribution-Free:
+   No assumptions on y|x distribution → works for any data
+
+2. Finite-Sample Validity:
+   Coverage guarantee holds for any n (not just n→∞)
+
+3. Calibration Set Independence:
+   Prediction intervals don't depend on test point x (marginal)
+   → Same width for all x in split conformal
+
+4. Monotonicity:
+   Smaller α → wider intervals → higher coverage
+
+5. Symmetry (for absolute error score):
+   Intervals symmetric around point prediction
+
+6. Efficiency:
+   Interval width proportional to quantile of error distribution
+   → Nearly optimal under correct model specification
+
+
+PRACTICAL METRICS
+================================================================================
+
+Empirical Coverage:
+    coverage = (1/n_test)·Σ_{i=1}^{n_test} 𝟙{y_i ∈ C(x_i)}
+    
+    Should be ≥ 1 - α
+
+Average Interval Width:
+    width_avg = (1/n_test)·Σ_{i=1}^{n_test} (upper_i - lower_i)
+    
+    Smaller is better (efficiency)
+
+Coverage-Width Tradeoff:
+    Efficiency = coverage / width_avg
+    
+    Higher is better
+
+Winkler Score (Interval Score):
+    IS_i = width_i + (2/α)·(lower_i - y_i)·𝟙{y_i < lower_i}
+                    + (2/α)·(y_i - upper_i)·𝟙{y_i > upper_i}
+    
+    Lower is better (penalizes width + miscoverage)
+

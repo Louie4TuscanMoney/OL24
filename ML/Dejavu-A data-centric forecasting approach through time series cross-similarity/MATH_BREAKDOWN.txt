@@ -1,0 +1,760 @@
+DEJAVU: MATHEMATICAL BREAKDOWN
+================================================================================
+Source: Kang et al., "Déjà vu: A data-centric forecasting approach through 
+time series cross-similarity", arXiv:1909.00221v3 [stat.ME], September 2020
+
+AUTHORS: Yanfei Kang (Beihang University, Beijing), 
+         Evangelos Spiliotis (National Technical University of Athens),
+         Fotios Petropoulos (University of Bath),
+         Nikolaos Athiniotis (National Technical University of Athens),
+         Feng Li (Central University of Finance and Economics, Beijing),
+         Vassilios Assimakopoulos (National Technical University of Athens)
+
+PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+Task: Model-Free Time Series Forecasting via Cross-Similarity
+Given: Target series y with n observations, Reference set Q with m series
+Goal: Forecast h steps ahead by aggregating future paths of similar series
+
+Core Insight (from paper): "Similar patterns may exist within the same signal 
+(process), i.e., the same time series" - BUT extended to ACROSS series
+
+Key Innovation: Cross-similarity (searching across reference set) vs. 
+Self-similarity (searching within same series) for forecasting
+
+Paper Quote: "We propose searching for similar patterns from a reference set, 
+i.e., 'cross-similarity'. Instead of extrapolating, the future paths of the 
+similar series are aggregated to obtain the forecasts of the target series."
+
+
+CORE MATHEMATICAL FRAMEWORK
+================================================================================
+
+1. TIME SERIES CROSS-SIMILARITY
+--------------------------------------------------------------------------------
+
+Time Series Segment:
+    x_t^h = (x_t, x_{t+1}, ..., x_{t+h-1})
+    
+    Where h = horizon length (lookback window)
+
+Similarity Measure (Distance-Based):
+    d(x_i^h, x_j^h) = ||x_i^h - x_j^h||_p
+    
+    Common choices:
+    - L1 norm: ||·||_1 = Σ|x_i - x_j|
+    - L2 norm: ||·||_2 = √(Σ(x_i - x_j)²)
+    - Dynamic Time Warping (DTW)
+
+Similarity Score:
+    sim(x_i^h, x_j^h) = exp(-d(x_i^h, x_j^h) / σ)
+    
+    Where σ = bandwidth parameter controlling similarity decay
+
+
+2. 7-STEP METHODOLOGY (FROM PAPER)
+--------------------------------------------------------------------------------
+
+Given: Target series y (length n, horizon h), Reference set Q (m series)
+
+Step 1: Seasonal Adjustment (if seasonal)
+    - Test: |ACF_s| > 1.645√(1 + 2Σ_{i=1}^{s-1} ACF_i²) / √n̂
+    - Method: STL (Seasonal and Trend decomposition using Loess)
+    - Apply Box-Cox transformation λ ∈ [0,1] before STL if multiplicative
+
+Step 2: Smoothing
+    - Method: Loess (Local Regression)
+    - Extract trend component (removes noise, outliers)
+    - span parameter: h (forecast horizon)
+
+Step 3: Scaling
+    - Divide by forecast origin (last historical value)
+    - Makes target and reference comparable
+
+Step 4: Measure Similarity (Three Distance Measures Tested)
+    - L1: d_L1(ỹ, Q̃^(i)) = Σ_t |ỹ_t - Q̃^(i)_t|
+    - L2: d_L2(ỹ, Q̃^(i)) = √(Σ_t (ỹ_t - Q̃^(i)_t)²)
+    - DTW: d_DTW(ỹ, Q̃^(i)) = D(n,n) via dynamic programming
+
+Step 5: Aggregate k Most Similar Series
+    - Select k series with smallest distances
+    - Forecast: median of their future paths (per horizon)
+    - Paper tested k ∈ {1, 5, 10, 50, 100, 500, 1000}
+    - Optimal: k = 500 (sweet spot per paper)
+
+Step 6: Inverse Scaling
+    - Multiply forecasts by forecast origin
+
+Step 7: Reseasonalize (if seasonal)
+    - Apply latest seasonal cycle to forecasts
+    - Inverse Box-Cox transformation
+
+
+3. DYNAMIC TIME WARPING (DTW)
+--------------------------------------------------------------------------------
+
+Purpose: Handle temporal distortions in pattern matching
+
+DTW Distance:
+    DTW(x, y) = min_π Σ_{(i,j)∈π} d(x_i, y_j)
+    
+    Where:
+    - π = alignment path satisfying:
+      * Boundary: π starts at (1,1), ends at (|x|, |y|)
+      * Continuity: consecutive steps differ by (0,1), (1,0), or (1,1)
+      * Monotonicity: indices non-decreasing
+    - d(x_i, y_j) = local distance (e.g., |x_i - y_j|)
+
+Dynamic Programming Solution:
+    D[i,j] = d(x_i, y_j) + min(D[i-1,j], D[i,j-1], D[i-1,j-1])
+    
+    With initialization:
+    D[0,0] = 0
+    D[i,0] = D[0,j] = ∞ for i,j > 0
+    
+    Complexity: O(|x|·|y|)
+
+Warping Path:
+    Optimal alignment π* = argmin_π Σ_{(i,j)∈π} d(x_i, y_j)
+
+
+4. NORMALIZATION FOR SIMILARITY
+--------------------------------------------------------------------------------
+
+Z-Score Normalization (Per Pattern):
+    x̃_t^h = (x_t^h - μ_t) / σ_t
+    
+    Where:
+    μ_t = mean(x_t^h) = (1/h)Σ_{i=0}^{h-1} x_{t+i}
+    σ_t = std(x_t^h) = √((1/h)Σ_{i=0}^{h-1} (x_{t+i} - μ_t)²)
+
+Shape-Based Similarity:
+    Normalizes amplitude differences
+    → Focuses on pattern shape rather than scale
+
+Distance After Normalization:
+    d(x_i^h, x_j^h) = ||x̃_i^h - x̃_j^h||
+
+
+5. MULTI-STEP FORECASTING
+--------------------------------------------------------------------------------
+
+Direct Multi-Step:
+    ŷ_{t+1:t+H} = weighted_avg(y_{i,1:H} for i in N_K(x_t^h))
+    
+    Where y_{i,1:H} = H-step outcome following pattern x_i^h
+
+Iterative Multi-Step:
+    For j = 1 to H:
+        ŷ_{t+j} = forecast(x_{t+j-h:t+j-1})
+        Append ŷ_{t+j} to history
+    
+    Recursively applies 1-step forecast
+
+Hybrid Approach:
+    Combine direct and iterative with learned weights
+
+
+6. ENSEMBLE VIA MULTIPLE SIMILARITY MEASURES
+--------------------------------------------------------------------------------
+
+Multiple Distance Functions:
+    d_1, d_2, ..., d_M (e.g., L1, L2, DTW, correlation)
+
+Per-Distance Forecasts:
+    ŷ_m = forecast using distance d_m
+
+Ensemble Prediction:
+    ŷ_ensemble = Σ_{m=1}^M α_m · ŷ_m
+    
+    Where weights α_m learned via validation:
+    α* = argmin_α Σ_{t∈val} L(y_t, Σ_m α_m ŷ_{m,t})
+
+
+ALGORITHMIC DETAILS
+================================================================================
+
+ALGORITHM 1: Basic Dejavu Forecasting
+--------------------------------------------------------------------------------
+Input: Historical data D, query x_query^h, K neighbors
+Output: Forecast ŷ
+
+1. Normalize query pattern:
+     x̃_query = (x_query - mean(x_query)) / std(x_query)
+
+2. FOR each historical pattern (x_i^h, y_i) in D:
+     Normalize: x̃_i = (x_i - mean(x_i)) / std(x_i)
+     Compute: d_i = ||x̃_query - x̃_i||
+   END FOR
+
+3. Select K nearest: N_K = top-K patterns by smallest d_i
+
+4. Compute weights:
+     w_i = exp(-d_i/σ) for i in N_K
+     w_i = w_i / Σ_j w_j  (normalize)
+
+5. Forecast:
+     ŷ = Σ_{i∈N_K} w_i · y_i
+
+6. RETURN ŷ
+
+Complexity: O(n·h) for distance computation, O(n log K) for K-NN
+
+
+ALGORITHM 2: DTW-Based Dejavu
+--------------------------------------------------------------------------------
+Input: Historical data D, query x_query^h, K neighbors
+Output: Forecast ŷ
+
+1. FOR each historical pattern (x_i^h, y_i) in D:
+     Compute DTW distance: d_i = DTW(x_query, x_i)
+   END FOR
+
+2. Select K nearest: N_K = top-K by smallest DTW distance
+
+3. Compute weights:
+     w_i = exp(-d_i²/(2σ²)) for i in N_K
+     Normalize: w_i = w_i / Σ_j w_j
+
+4. Forecast:
+     ŷ = Σ_{i∈N_K} w_i · y_i
+
+5. RETURN ŷ
+
+Complexity: O(n·h²) for DTW computation
+
+
+ALGORITHM 3: Adaptive Dejavu (Online Learning)
+--------------------------------------------------------------------------------
+Input: Stream of data, update frequency T_update
+Output: Forecasts over time
+
+1. Initialize historical database D = ∅
+
+2. FOR each timestep t:
+     
+     a. Query: x_query = x_{t-h:t-1}
+     
+     b. IF |D| ≥ K:
+          Forecast: ŷ_t = Dejavu(D, x_query, K)
+        ELSE:
+          ŷ_t = baseline (e.g., last value, moving average)
+     
+     c. Observe: y_t (true value)
+     
+     d. IF t mod T_update == 0:
+          Add to database: D = D ∪ {(x_{t-h:t-1}, y_t)}
+     
+     e. IF |D| > D_max:
+          Remove oldest entry (maintain sliding window)
+   
+   END FOR
+
+Adaptivity: Database updates with recent patterns
+Complexity: O(1) per timestep (amortized)
+
+
+THEORETICAL PROPERTIES
+================================================================================
+
+1. CONVERGENCE PROPERTIES
+--------------------------------------------------------------------------------
+
+K-NN Consistency:
+    Under regularity conditions, as n → ∞ and K/n → 0:
+    
+    E[(ŷ_KNN - y)²] → E[(y - E[y|x])²]
+    
+    Where E[y|x] = conditional expectation
+
+Asymptotic Optimality:
+    Dejavu forecast converges to Bayes optimal predictor
+    when similarity measure correctly captures conditional distribution
+
+
+2. SAMPLE COMPLEXITY
+--------------------------------------------------------------------------------
+
+Required Database Size:
+    n ≥ C · K · (h / ε²)
+    
+    Where:
+    - C = constant depending on data distribution
+    - K = number of neighbors
+    - h = pattern length
+    - ε = desired accuracy
+
+Implication: Longer patterns (larger h) require more data
+
+
+3. COMPUTATIONAL COMPLEXITY
+--------------------------------------------------------------------------------
+
+Naive Implementation:
+    Preprocessing: O(n·h) to store patterns
+    Query: O(n·h) to compute all distances
+    Selection: O(n log K) to find K nearest
+    Total per forecast: O(n·h + n log K) ≈ O(n·h)
+
+With DTW:
+    Query: O(n·h²) for all DTW distances
+    Total: O(n·h²)
+
+Optimized (Approximate K-NN):
+    Using locality-sensitive hashing (LSH) or KD-trees:
+    Query: O(h log n) expected time
+    Total: O(h log n)
+
+
+4. MEMORY REQUIREMENTS
+--------------------------------------------------------------------------------
+
+Storage:
+    Database: O(n·h) for patterns + O(n·H) for outcomes
+    Total: O(n·(h+H))
+
+For large n:
+    Use sliding window of size W
+    Memory: O(W·(h+H))
+
+
+SIMILARITY MEASURES - DETAILED
+================================================================================
+
+1. EUCLIDEAN DISTANCE
+--------------------------------------------------------------------------------
+Formula:
+    d_L2(x, y) = √(Σ_{i=1}^h (x_i - y_i)²)
+
+Properties:
+    - Sensitive to amplitude differences
+    - Sensitive to phase shifts
+    - Fast to compute: O(h)
+
+Use When:
+    - Patterns aligned in time
+    - Amplitude matters
+
+
+2. MANHATTAN DISTANCE
+--------------------------------------------------------------------------------
+Formula:
+    d_L1(x, y) = Σ_{i=1}^h |x_i - y_i|
+
+Properties:
+    - More robust to outliers than L2
+    - Fast: O(h)
+
+Use When:
+    - Outliers present
+    - Prefer robustness over smooth metric
+
+
+3. PEARSON CORRELATION
+--------------------------------------------------------------------------------
+Formula:
+    corr(x, y) = (Σ(x_i - x̄)(y_i - ȳ)) / (√(Σ(x_i-x̄)²) · √(Σ(y_i-ȳ)²))
+    
+    Distance: d_corr(x, y) = 1 - |corr(x, y)|
+
+Properties:
+    - Scale-invariant
+    - Captures linear relationship
+    - O(h) after normalization
+
+Use When:
+    - Shape similarity more important than amplitude
+    - Different scales across series
+
+
+4. DYNAMIC TIME WARPING (DTW)
+--------------------------------------------------------------------------------
+Formula:
+    DTW(x, y) = min_π Σ_{(i,j)∈π} |x_i - y_j|
+
+Properties:
+    - Handles temporal distortions
+    - Non-metric (doesn't satisfy triangle inequality)
+    - Slower: O(h²)
+
+Use When:
+    - Patterns have phase shifts
+    - Speed variations exist
+    - Need temporal flexibility
+
+
+5. COSINE SIMILARITY
+--------------------------------------------------------------------------------
+Formula:
+    cos(x, y) = (x·y) / (||x||·||y||)
+    
+    Distance: d_cos(x, y) = 1 - cos(x, y)
+
+Properties:
+    - Direction-based similarity
+    - Scale-invariant
+    - O(h)
+
+Use When:
+    - Direction of change matters
+    - Magnitude less important
+
+
+WEIGHTING SCHEMES
+================================================================================
+
+1. UNIFORM WEIGHTS
+--------------------------------------------------------------------------------
+    w_i = 1/K for all i ∈ N_K
+
+Simple averaging of K neighbors
+No differentiation by distance
+
+
+2. INVERSE DISTANCE WEIGHTS
+--------------------------------------------------------------------------------
+    w_i = 1/d_i
+    
+    Normalized: w_i = (1/d_i) / Σ_j (1/d_j)
+
+Closer neighbors weighted more heavily
+
+
+3. GAUSSIAN KERNEL WEIGHTS
+--------------------------------------------------------------------------------
+    w_i = exp(-d_i² / (2σ²))
+    
+    Normalized: w_i = exp(-d_i²/(2σ²)) / Σ_j exp(-d_j²/(2σ²))
+
+Smooth decay with distance
+Parameter σ controls decay rate
+
+
+4. EXPONENTIAL DECAY
+--------------------------------------------------------------------------------
+    w_i = exp(-d_i / σ)
+    
+Similar to Gaussian but with different decay profile
+
+
+5. RANK-BASED WEIGHTS
+--------------------------------------------------------------------------------
+    w_i = (K - rank_i + 1) / Σ_{j=1}^K j
+    
+    Where rank_i = rank of neighbor i (1 = closest)
+
+Weights decrease linearly with rank
+
+
+HYPERPARAMETER TUNING
+================================================================================
+
+1. NUMBER OF NEIGHBORS K
+--------------------------------------------------------------------------------
+
+Small K (K = 1-5):
+    + More sensitive to local patterns
+    + Less averaging/smoothing
+    - Higher variance
+    - Risk of overfitting to noise
+
+Large K (K = 50-100):
+    + More stable predictions
+    + Lower variance
+    - May miss local patterns
+    - Over-smoothing
+
+Optimal K Selection:
+    Cross-validation on validation set
+    Grid search: K ∈ {1, 3, 5, 10, 20, 50, 100}
+    Minimize validation error
+
+
+2. PATTERN LENGTH h
+--------------------------------------------------------------------------------
+
+Short h (h = 5-20):
+    + Captures local patterns
+    + More matches in database
+    - May miss long-term structure
+
+Long h (h = 50-200):
+    + Captures long-term dependencies
+    + More context for matching
+    - Fewer matches (sparser)
+    - Higher computational cost
+
+Selection Strategy:
+    Domain knowledge + cross-validation
+    Energy: h = 24 (daily pattern)
+    Finance: h = 20-60 (trading patterns)
+
+
+3. SIMILARITY BANDWIDTH σ
+--------------------------------------------------------------------------------
+
+Small σ:
+    + Sharp weighting (only closest matter)
+    - May underweight useful neighbors
+
+Large σ:
+    + Smooth weighting
+    - May overweight distant neighbors
+
+Auto-Selection:
+    σ = median(d_i for i in N_K)
+    Adapts to local density
+
+
+4. DATABASE SIZE n
+--------------------------------------------------------------------------------
+
+Larger n:
+    + More patterns available
+    + Better coverage
+    - Higher computational cost
+    - More memory
+
+Sliding Window:
+    Keep most recent W samples
+    W = 1000-10000 typical
+    Balance: memory vs. pattern coverage
+
+
+ADVANCED EXTENSIONS
+================================================================================
+
+1. MULTI-RESOLUTION DEJAVU
+--------------------------------------------------------------------------------
+
+Multiple Pattern Lengths:
+    h_1 = 10 (short-term)
+    h_2 = 50 (medium-term)
+    h_3 = 200 (long-term)
+
+Per-Resolution Forecast:
+    ŷ_1, ŷ_2, ŷ_3
+
+Ensemble:
+    ŷ = α_1·ŷ_1 + α_2·ŷ_2 + α_3·ŷ_3
+
+
+2. CONDITIONAL DEJAVU
+--------------------------------------------------------------------------------
+
+Incorporate Exogenous Variables:
+    Pattern: (x_t^h, z_t^h) where z = external features
+    
+    Distance: d((x,z), (x',z')) = λ·d_x(x,x') + (1-λ)·d_z(z,z')
+
+
+3. HIERARCHICAL DEJAVU
+--------------------------------------------------------------------------------
+
+Coarse-to-Fine Search:
+    1. Cluster historical patterns
+    2. Find closest cluster
+    3. Search within cluster for K-NN
+    
+Speedup: O(log C + n/C) vs O(n) where C = clusters
+
+
+4. NEURAL DEJAVU
+--------------------------------------------------------------------------------
+
+Learned Similarity:
+    s(x, x') = f_θ(x, x')
+    
+    Where f_θ = neural network trained end-to-end
+
+Differentiable K-NN:
+    Soft selection of neighbors via attention weights
+
+
+IMPLEMENTATION FORMULAS
+================================================================================
+
+Efficient Euclidean Distance (Vectorized):
+--------------------------------------------------------------------------------
+Given: X = (n, h) matrix of historical patterns
+       q = (h,) query pattern
+
+Compute all distances at once:
+    D = √(Σ_j (X_{ij} - q_j)²)
+    
+Vectorized:
+    D² = ||X||² - 2·X·q + ||q||²
+    
+    Where ||X||² = row-wise sum of squares
+
+
+K-NN Selection (Partial Sort):
+--------------------------------------------------------------------------------
+Given: distances D = (d_1, ..., d_n)
+       K neighbors desired
+
+Use partial sort (quickselect):
+    N_K = indices of K smallest elements in D
+    
+Complexity: O(n) average case (vs O(n log n) full sort)
+
+
+EXPERIMENTAL RESULTS (FROM PAPER)
+================================================================================
+
+DATASETS (FROM KANG ET AL. 2020)
+--------------------------------------------------------------------------------
+
+M1 & M3 Competition Data (Target Series):
+- Yearly: 826 series (history 9-52 years, h=6)
+- Quarterly: 959 series (history 10-106 quarters, h=8)
+- Monthly: 2045 series (history 30-132 months, h=18)
+- Total: 3830 target series
+
+M4 Competition Data (Reference Set):
+- Yearly: 23,000 series (median length 29)
+- Quarterly: 24,000 series (median length 88)
+- Monthly: 48,000 series (median length 202)
+- Rich, diverse reference set
+
+PERFORMANCE RESULTS (MASE - Mean Absolute Scaled Error)
+--------------------------------------------------------------------------------
+
+Distance Measure Comparison (k=500, DTW with preprocessing):
+Frequency | L1    | L2    | DTW   | Winner
+----------|-------|-------|-------|--------
+Yearly    | 2.785 | 2.794 | 2.783 | DTW
+Quarterly | 1.262 | 1.261 | 1.250 | DTW ✓
+Monthly   | 0.943 | 0.942 | 0.932 | DTW ✓
+
+Finding: DTW best for monthly (statistically significant), L1/L2/DTW similar for yearly/quarterly
+
+Pool Size (k) Effect (DTW, with preprocessing):
+k     | Yearly | Quarterly | Monthly
+------|--------|-----------|--------
+1     | 3.345  | 1.440     | 1.080
+5     | 2.948  | 1.316     | 0.971
+10    | 2.846  | 1.297     | 0.950
+50    | 2.781  | 1.257     | 0.935
+100   | 2.777  | 1.254     | 0.936
+500   | 2.783  | 1.250     | 0.932 ✓
+1000  | 2.805  | 1.250     | 0.932
+
+Finding: k=500 is sweet spot (improvements taper off after k>100)
+
+Preprocessing Impact (DTW, k=500):
+Preprocessing       | Yearly | Quarterly | Monthly
+--------------------|--------|-----------|--------
+No preprocessing    | 3.649  | 1.734     | 1.381
+With seasonal+smooth| 2.783  | 1.250     | 0.932
+
+Finding: Preprocessing CRITICAL (28% MASE reduction!)
+
+BENCHMARK COMPARISON (From Paper Figure 3 & 4)
+--------------------------------------------------------------------------------
+
+Against Statistical Models (All history, k=500, DTW):
+
+Yearly:
+- Similarity: 2.783
+- ETS: 2.82
+- ARIMA: 2.95
+- Theta: 2.78
+- SHD: 2.88
+→ Similarity BEST for yearly!
+
+Quarterly:
+- Similarity: 1.250
+- ETS: 1.26
+- ARIMA: 1.30
+- Theta: 1.21 (best)
+- SHD: 1.28
+→ Similarity competitive (2nd place)
+
+Monthly:
+- Similarity: 0.932
+- ETS: 0.931 (best)
+- ARIMA: 0.960
+- Theta: 0.945
+- SHD: 0.951
+→ Similarity tied with ETS!
+
+ETS-Similarity Combination (Simple Average):
+- Yearly: 2.75 (BEST overall)
+- Quarterly: 1.20 (BEST overall)
+- Monthly: 0.920 (BEST overall)
+→ Simple combination ALWAYS best!
+
+MCB Statistical Tests (From Paper Figure 4):
+- Yearly short series (≤6 years): Similarity significantly better than all benchmarks
+- All frequencies: ETS-Similarity significantly better than individual methods
+
+PREDICTION INTERVALS (From Paper Table 5)
+--------------------------------------------------------------------------------
+
+95% Prediction Intervals (α=0.05):
+
+                | MSIS  | Coverage | Upper Coverage | Spread
+----------------|-------|----------|----------------|-------
+Yearly:         |       | Target   | Target         |
+Similarity      | 26.43 | 88.68%   | 94.59%         | 13.57
+ETS             | 37.01 | 81.58%   | 86.84%         | 11.97
+ARIMA           | 81.58 | 77.26%   | 86.08%         | 8.36
+Theta           | 39.57 | 80.85%   | 84.71%         | 8.87
+ETS-Similarity  | 26.81 | 89.59%   | 93.12%         | 12.77
+
+→ Similarity BEST MSIS and coverage for yearly!
+
+Monthly:        |       |          |                |
+Similarity      | 7.643 | 90.50%   | 95.87%         | 4.853
+ETS             | 7.333 | 90.69%   | 94.22%         | 4.300
+ARIMA           | 8.348 | 89.34%   | 94.66%         | 4.087
+ETS-Similarity  | 6.591 | 93.15%   | 96.44%         | 4.576
+
+→ ETS-Similarity BEST for monthly!
+
+Key Finding: Similarity offers superior UPPER COVERAGE (97.5% target = service levels!)
+
+COMPUTATIONAL EFFICIENCY (From Paper Section 4.2)
+--------------------------------------------------------------------------------
+
+DTW vs L1/L2 Time (Relative):
+- Yearly: DTW ~6× slower
+- Quarterly: DTW ~10× slower  
+- Monthly: DTW ~27× slower
+
+But: All tractable for <10K series (milliseconds per series)
+
+Paper Recommendation:
+- ABC-XYZ analysis: Use DTW for AZ class (important + hard to forecast)
+- Use L1/L2 for rest (99% as accurate, 10-27× faster)
+
+
+Weighted Average (Vectorized):
+--------------------------------------------------------------------------------
+Given: K neighbors with weights w and outcomes y
+
+Compute:
+    ŷ = Σ_{i=1}^K w_i · y_i = w^T · y
+    
+Where w normalized: Σ w_i = 1
+
+
+COMPLEXITY SUMMARY
+================================================================================
+
+Operation                | Time Complexity | Space Complexity
+-------------------------|-----------------|------------------
+Build database           | O(n·h)         | O(n·h)
+Euclidean K-NN query    | O(n·h)         | O(n)
+DTW K-NN query          | O(n·h²)        | O(h²)
+Approximate K-NN (LSH)   | O(h log n)     | O(n·h)
+Multi-step forecast (H)  | O(K·H)         | O(H)
+Online update            | O(h)           | O(1)
+
+Where:
+- n = database size
+- h = pattern length
+- K = number of neighbors
+- H = forecast horizon
+

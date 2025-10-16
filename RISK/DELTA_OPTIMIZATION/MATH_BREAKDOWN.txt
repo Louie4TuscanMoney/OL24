@@ -1,0 +1,605 @@
+# Delta Optimization - Mathematical Foundations
+
+**Subject:** Correlation-based hedging using delta sensitivity analysis  
+**Foundations:** Options theory, Correlation analysis, Mean reversion  
+**Application:** Treating ML and market as correlated assets  
+**Date:** October 15, 2025
+
+================================================================================
+SECTION 1: CORRELATION COEFFICIENT
+================================================================================
+
+### Formula 1.1: Pearson Correlation Coefficient
+
+ρ(X,Y) = Cov(X,Y) / (σ_X × σ_Y)
+
+Where:
+  ρ = Correlation coefficient (-1 to +1)
+  Cov(X,Y) = Covariance between X and Y
+  σ_X = Standard deviation of X
+  σ_Y = Standard deviation of Y
+
+Expanded form:
+ρ = Σ((x_i - μ_X)(y_i - μ_Y)) / sqrt(Σ(x_i - μ_X)² × Σ(y_i - μ_Y)²)
+
+---
+
+Example (ML predictions vs Market implied values):
+
+Historical data (last 20 games):
+  ML predictions: [+10, +12, +9, +11, +13, +15, +8, +14, +12, +10,
+                   +11, +13, +9, +12, +14, +15, +11, +10, +13, +12]
+  
+  Market implied: [-5, -7, -4, -6, -8, -9, -3, -8, -7, -5,
+                   -6, -8, -4, -7, -8, -9, -6, -5, -8, -7]
+
+Calculate:
+  μ_ML = 11.65
+  μ_Market = -6.55
+  
+  σ_ML = 2.08
+  σ_Market = 1.82
+  
+  Cov(ML, Market) = 3.24
+  
+  ρ = 3.24 / (2.08 × 1.82)
+    = 3.24 / 3.79
+    = 0.855
+
+Interpretation: Strong positive correlation (0.855)
+When ML predicts high values, market usually agrees
+
+================================================================================
+SECTION 2: GAP ANALYSIS (RUBBER BAND CONCEPT)
+================================================================================
+
+### Formula 2.1: Current Gap
+
+Gap = ML_prediction - Market_implied_prediction
+
+Where market implied is converted to same scale as ML:
+  Market_implied = Spread × conversion_factor
+
+Example:
+  ML prediction: +15.1 (LAL leads by 15.1 at halftime)
+  Market spread: -7.5 (LAL expected to win by 7.5 full game)
+  
+  Convert market to halftime:
+  Market_implied = -7.5 / 0.55 = +4.1 (approx halftime lead)
+  
+  Gap = 15.1 - 4.1 = 11.0 points
+
+---
+
+### Formula 2.2: Gap Z-Score
+
+Z_gap = (Gap_current - μ_gap) / σ_gap
+
+Where:
+  μ_gap = Historical mean gap
+  σ_gap = Historical standard deviation of gaps
+
+Example:
+  Historical gaps: [+2, -1, +3, +1, -2, +2, +1, 0, +3, -1,
+                    +2, +1, -1, +2, +1, 0, +3, +2, +1, +2]
+  
+  μ_gap = +1.2 points
+  σ_gap = 1.35 points
+  
+  Current gap = +11.0 points
+  
+  Z_gap = (11.0 - 1.2) / 1.35
+        = 9.8 / 1.35
+        = 7.26
+  
+Interpretation: Current gap is 7.26 standard deviations from mean!
+This is EXTREMELY unusual (>99.999% percentile)
+Strong mean reversion expected
+
+---
+
+### Formula 2.3: Mean Reversion Probability
+
+P(Reversion) = 1 - P(|Z| > z | Z = z_current)
+
+Using standard normal CDF:
+P(|Z| > 7.26) = 2 × (1 - Φ(7.26)) ≈ 0.0000000001
+
+Therefore:
+P(Reversion) ≈ 1.0 (essentially certain)
+
+Translation: When gap is 7.26σ, nearly 100% probability it will narrow.
+
+================================================================================
+SECTION 3: DELTA (SENSITIVITY ANALYSIS)
+================================================================================
+
+### Formula 3.1: Delta (Options Theory Adaptation)
+
+In options:
+Δ = ∂V/∂S (change in option value per change in underlying)
+
+In sports betting:
+Δ_ML = ∂P_win/∂ML_forecast
+Δ_Market = ∂P_win/∂Market_spread
+
+Example:
+  ML forecast changes +14 → +15 (+1 point)
+  Win probability changes 0.72 → 0.75 (+0.03)
+  
+  Δ_ML = 0.03 / 1.0 = 0.03
+  
+  Market spread changes -7 → -8 (-1 point)
+  Win probability changes 0.72 → 0.68 (-0.04)
+  
+  Δ_Market = 0.04 / 1.0 = 0.04
+
+Interpretation:
+  ML has lower delta (less sensitive)
+  Market has higher delta (more sensitive)
+
+---
+
+### Formula 3.2: Delta Ratio
+
+Delta_Ratio = Δ_ML / Δ_Market
+
+Example:
+  Δ_ML = 0.03
+  Δ_Market = 0.04
+  
+  Delta_Ratio = 0.03 / 0.04 = 0.75
+
+Interpretation: ML is 75% as sensitive as market
+
+---
+
+### Formula 3.3: Hedge Ratio (From Delta)
+
+h = ρ × (σ_ML / σ_Market)
+
+Where:
+  h = Optimal hedge ratio
+  ρ = Correlation coefficient
+  σ_ML = Volatility of ML predictions
+  σ_Market = Volatility of market odds
+
+Example:
+  ρ = 0.85
+  σ_ML = 2.08
+  σ_Market = 1.82
+  
+  h = 0.85 × (2.08 / 1.82)
+    = 0.85 × 1.14
+    = 0.97
+
+Interpretation: For every $100 on ML side, hedge with $97 on market side
+
+================================================================================
+SECTION 4: HEDGING STRATEGIES
+================================================================================
+
+### Formula 4.1: Partial Hedge
+
+Hedge_Amount = Primary_Bet × Hedge_Ratio × Confidence_Factor
+
+Where confidence factor ∈ [0, 1] based on certainty
+
+Example:
+  Primary bet: $500 (on ML side)
+  Hedge ratio: 0.30 (30% hedge)
+  Confidence: 0.80 (80% certain ML is right)
+  
+  Hedge_Amount = $500 × 0.30 × (1 - 0.80)
+               = $500 × 0.30 × 0.20
+               = $30
+  
+  Net exposure: $500 - $30 = $470
+
+---
+
+### Formula 4.2: Delta-Neutral Position
+
+For completely neutral position (no directional exposure):
+
+Position_ML = h × Position_Market
+
+Example:
+  Want $1000 total exposure, delta-neutral
+  Hedge ratio: 0.97
+  
+  Position_ML = 0.97 × Position_Market
+  Position_ML + Position_Market = $1000
+  
+  Solving:
+  Position_Market = $1000 / (1 + 0.97) = $508
+  Position_ML = $1000 - $508 = $492
+
+Result: $492 on ML side, $508 on market side
+Net exposure: ~$0 (delta-neutral)
+
+---
+
+### Formula 4.3: Optimal Directional Position
+
+For directional bet with partial hedge:
+
+Net_Exposure = Primary - (Primary × h × (1 - confidence))
+
+Example:
+  Primary: $500
+  h: 0.30
+  Confidence: 0.85
+  
+  Hedge = $500 × 0.30 × 0.15 = $22.50
+  Net_Exposure = $500 - $22.50 = $477.50
+
+================================================================================
+SECTION 5: MEAN REVERSION ANALYSIS
+================================================================================
+
+### Formula 5.1: Expected Gap Convergence
+
+E[Gap_future] = Gap_current × e^(-λt)
+
+Where:
+  λ = Mean reversion speed (calibrated from historical data)
+  t = Time periods ahead
+
+Example:
+  Current gap: +11.0 points
+  λ = 0.15 (moderate mean reversion)
+  t = 1 (next game)
+  
+  E[Gap_future] = 11.0 × e^(-0.15×1)
+                = 11.0 × 0.861
+                = 9.47 points
+
+Expected gap narrows from 11.0 to 9.47 (14% reduction)
+
+---
+
+### Formula 5.2: Half-Life of Gap
+
+t_half = ln(2) / λ
+
+Example:
+  λ = 0.15
+  
+  t_half = 0.693 / 0.15
+         = 4.62 games
+
+Interpretation: Gap halves every ~5 games on average
+
+---
+
+### Formula 5.3: Probability of Gap Closing
+
+P(Gap closes by time t) = 1 - e^(-λt)
+
+Example:
+  λ = 0.15, t = 3 games
+  
+  P(Closes) = 1 - e^(-0.15×3)
+            = 1 - e^(-0.45)
+            = 1 - 0.638
+            = 0.362 (36.2%)
+
+Probability gap closes significantly within 3 games: 36%
+
+================================================================================
+SECTION 6: RUBBER BAND TENSION FORMULA
+================================================================================
+
+### Formula 6.1: Tension Metric
+
+Tension = Gap × ρ / σ_combined
+
+Where:
+  σ_combined = sqrt(σ_ML² + σ_Market²)
+
+Example:
+  Gap = 11.0
+  ρ = 0.85
+  σ_ML = 2.08
+  σ_Market = 1.82
+  σ_combined = sqrt(4.33 + 3.31) = sqrt(7.64) = 2.76
+  
+  Tension = 11.0 × 0.85 / 2.76
+          = 9.35 / 2.76
+          = 3.39
+
+Interpretation: Tension score of 3.39 (high tension, strong reversion expected)
+
+---
+
+### Formula 6.2: Optimal Bet Based on Tension
+
+Bet_multiplier = 1 + (Tension / 10)
+
+For tension > 5: Cap at 1.5× (safety limit)
+
+Example:
+  Base bet: $500
+  Tension: 3.39
+  
+  Multiplier = 1 + (3.39 / 10) = 1.339
+  
+  Optimal bet = $500 × 1.339 = $670
+
+When tension is high, increase bet size by up to 50%
+
+================================================================================
+SECTION 7: COVARIANCE MATRIX (MULTI-ASSET)
+================================================================================
+
+### Formula 7.1: 2×2 Covariance Matrix
+
+For ML and Market as two correlated assets:
+
+Σ = [ σ_ML²           ρ×σ_ML×σ_Market ]
+    [ ρ×σ_ML×σ_Market  σ_Market²       ]
+
+Example:
+  σ_ML = 2.08
+  σ_Market = 1.82
+  ρ = 0.85
+  
+  Σ = [ 4.33   3.22 ]
+      [ 3.22   3.31 ]
+
+---
+
+### Formula 7.2: Portfolio Variance (Hedged Position)
+
+For position w_ML on ML and w_Market on Market:
+
+Var(Portfolio) = w_ML² × σ_ML² + w_Market² × σ_Market² + 2 × w_ML × w_Market × ρ × σ_ML × σ_Market
+
+Example:
+  w_ML = $500
+  w_Market = $150 (hedge)
+  
+  Var = 500² × 4.33 + 150² × 3.31 + 2 × 500 × 150 × 0.85 × 2.08 × 1.82
+      = 1,082,500 + 74,475 + 488,580
+      = 1,645,555
+
+σ = sqrt(1,645,555) = $1,283
+
+Comparison to no hedge:
+  No hedge: σ = $500 × 2.08 = $1,040
+  With hedge: σ = $1,283
+  
+Hedge INCREASES variance in this case (negative diversification benefit)
+
+This is why hedging ML with market can be counterproductive!
+
+================================================================================
+SECTION 8: BUTTERFLY SPREAD MATHEMATICS
+================================================================================
+
+### Formula 8.1: Butterfly Spread Setup
+
+Position structure:
+  Long Position 1: +$300 on LAL (ML side)
+  Short Position: -$100 on middle
+  Long Position 2: +$100 on BOS (market side)
+
+Net exposure: $300 - $100 = $200 bullish LAL
+
+---
+
+### Formula 8.2: Payoff Profile
+
+Payoff(outcome) = P1 × payout(outcome) + P2 × payout(outcome)
+
+Example outcomes:
+  LAL wins by 10: P1 wins $273, P2 loses $100 = +$173
+  LAL wins by 5: P1 loses $300, P2 wins $91 = -$209 (worst case)
+  BOS wins by 2: P1 loses $300, P2 wins $91 = -$209
+
+Max profit: +$273 (if LAL covers)
+Max loss: -$209 (if close game)
+Breakeven: Need LAL to cover -7.5
+
+---
+
+### Formula 8.3: Expected Value of Butterfly
+
+EV = Σ(P(outcome_i) × Payoff(outcome_i))
+
+Example:
+  P(LAL covers -7.5) = 0.70 (from ML)
+  P(LAL doesn't cover) = 0.30
+  
+  EV = 0.70 × (+$173) + 0.30 × (-$209)
+     = $121.10 - $62.70
+     = $58.40
+
+Positive EV, but note max loss is limited to $209
+
+================================================================================
+SECTION 9: TIME-SERIES CORRELATION
+================================================================================
+
+### Formula 9.1: Rolling Correlation
+
+ρ_t = Correlation(X[t-n:t], Y[t-n:t])
+
+Where n = window size (typically 20-50)
+
+Example (rolling 20-game window):
+  At game 100:
+    ρ_100 = corr(ML[80:100], Market[80:100]) = 0.85
+  
+  At game 101:
+    ρ_101 = corr(ML[81:101], Market[81:101]) = 0.87
+
+Correlation increased by 0.02 (strengthening)
+
+---
+
+### Formula 9.2: Correlation Momentum
+
+Momentum = ρ_recent - ρ_older
+
+Example:
+  ρ_recent = 0.87 (last 10 games)
+  ρ_older = 0.83 (previous 10 games)
+  
+  Momentum = 0.87 - 0.83 = +0.04
+
+Positive momentum indicates strengthening correlation
+
+---
+
+### Formula 9.3: Exponentially Weighted Correlation
+
+ρ_weighted = Σ(w_i × (x_i - μ_X)(y_i - μ_Y)) / sqrt(Σw_i(x_i - μ_X)² × Σw_i(y_i - μ_Y)²)
+
+Where:
+  w_i = λ^(n-i) (exponential weights, recent data weighted more)
+  λ = 0.94 (typical decay factor)
+
+Example:
+  For 20 games, with λ = 0.94:
+    Game 20 (most recent): w = 1.00
+    Game 19: w = 0.94
+    Game 18: w = 0.88
+    ...
+    Game 1 (oldest): w = 0.28
+
+This gives more weight to recent correlation, adapting to changes
+
+================================================================================
+SECTION 10: PERFORMANCE METRICS
+================================================================================
+
+### Formula 10.1: Hedge Effectiveness
+
+Effectiveness = (σ_unhedged - σ_hedged) / σ_unhedged
+
+Example:
+  σ_unhedged = $1,040
+  σ_hedged = $892
+  
+  Effectiveness = ($1,040 - $892) / $1,040
+                = $148 / $1,040
+                = 0.142 (14.2% variance reduction)
+
+---
+
+### Formula 10.2: Hedging Cost
+
+Cost = E[Profit_unhedged] - E[Profit_hedged]
+
+Example:
+  Unhedged EV: $96.36
+  Hedged EV: $88.20
+  
+  Cost = $96.36 - $88.20 = $8.16
+
+Trade-off: Pay $8.16 EV to reduce variance by 14.2%
+
+---
+
+### Formula 10.3: Sharpe Ratio Comparison
+
+Sharpe_unhedged = EV_unhedged / σ_unhedged
+Sharpe_hedged = EV_hedged / σ_hedged
+
+Example:
+  Unhedged: $96.36 / $1,040 = 0.093
+  Hedged: $88.20 / $892 = 0.099
+
+Hedged Sharpe is HIGHER (better risk-adjusted returns)
+Worth paying $8.16 to improve Sharpe by 6.5%
+
+================================================================================
+SECTION 11: REAL-TIME CALCULATIONS
+================================================================================
+
+All calculations must be real-time (<15ms total):
+
+Operation                        Complexity    Time Target
+──────────────────────────────────────────────────────────
+Calculate correlation            O(N)          <5ms (N≤100)
+Calculate gap                    O(1)          <0.5ms
+Calculate z-score                O(1)          <1ms
+Calculate delta                  O(1)          <1ms
+Calculate hedge ratio            O(1)          <1ms
+Calculate hedge amount           O(1)          <0.5ms
+Calculate tension metric         O(1)          <2ms
+Update correlation history       O(1)          <1ms
+Check momentum                   O(N)          <3ms (N≤20)
+──────────────────────────────────────────────────────────
+TOTAL                                          <15ms
+
+Result: Real-time compatible, negligible overhead
+
+================================================================================
+SECTION 12: CORRELATION BREAKDOWN OPPORTUNITIES
+================================================================================
+
+### Formula 12.1: Correlation Breakdown Severity
+
+Severity = |Gap| × (1 + ρ) / σ_combined
+
+High correlation (ρ → 1) makes breakdown more severe
+
+Example:
+  Gap = 11.0
+  ρ = 0.85
+  σ_combined = 2.76
+  
+  Severity = 11.0 × 1.85 / 2.76
+           = 20.35 / 2.76
+           = 7.37
+
+Very high severity score → Strong opportunity
+
+---
+
+### Formula 12.2: Optimal Bet with Correlation Breakdown
+
+Bet_optimal = Base_Kelly × (1 + Severity / 10)
+
+Capped at 2.0× base Kelly
+
+Example:
+  Base Kelly: $500
+  Severity: 7.37
+  
+  Bet_optimal = $500 × (1 + 7.37/10)
+              = $500 × 1.737
+              = $869
+  
+  Cap at 2.0×: min($869, $1000) = $869
+
+Bet 74% more due to correlation breakdown
+
+================================================================================
+END OF MATHEMATICAL FOUNDATIONS
+================================================================================
+
+Summary Formulas:
+
+1. Correlation: ρ = Cov(X,Y) / (σ_X × σ_Y)
+2. Gap: Gap = ML - Market_implied
+3. Z-score: Z = (Gap - μ) / σ
+4. Delta: Δ = ∂P_win / ∂Prediction
+5. Hedge ratio: h = ρ × (σ_ML / σ_Market)
+6. Tension: T = Gap × ρ / σ_combined
+7. Bet multiplier: 1 + (Tension / 10), capped at 2.0×
+
+Performance: All calculations <15ms (real-time compatible)
+
+Applied to NBA betting:
+- Typical correlation: 0.80-0.90 (strong)
+- Typical gap: 1-3 points (normal)
+- Large gap: 10+ points (opportunity)
+- Hedge ratio: 0.25-0.35 (partial hedge)
+- Tension metric: 0-5 (normal), 5-10 (extreme)
+
+Use correlation as signal: Large gaps with high correlation = opportunity
+
