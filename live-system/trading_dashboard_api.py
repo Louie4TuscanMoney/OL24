@@ -126,12 +126,7 @@ async def startup():
             nba_api = None
         
         # Initialize Trading Engine (will auto-download Mamba model!)
-        print("\n🐍 Initializing Mamba Trading Engine...")
-        if LiveTradingEngine:
-            trading_engine = LiveTradingEngine(
-                model_path=None,  # ⚡ CRITICAL: Triggers Google Drive auto-download!
-                mae=9.655,  # ✅ CORRECT: Branch B (Final Score) MAE
-                starting_bankroll=1000
+        
             )
             print("✅ Trading engine initialized")
             print(f"   → Mamba model loaded: {trading_engine.model is not None}")

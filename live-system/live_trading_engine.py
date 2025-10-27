@@ -76,30 +76,43 @@ class LiveTradingEngine:
         
         # Load ML model (try multiple paths + auto-download)
         if model_path is None:
+            # RAILWAY FIX: Use /tmp for persistent storage during session
+            # Railway's root filesystem is ephemeral - /tmp persists during runtime
+            railway_model_path = "/tmp/MAMBA_MENTALITY_SYSTEM.pkl"
+            
             # Try multiple possible locations
             possible_paths = [
-                "MAMBA_MENTALITY_SYSTEM.pkl",  # Railway root
-                "../mambaofficial/models/MAMBA_MENTALITY_SYSTEM.pkl",  # Local
+                railway_model_path,  # Railway /tmp (persists during runtime)
+                "MAMBA_MENTALITY_SYSTEM.pkl",  # Current directory
+                "../mambaofficial/models/MAMBA_MENTALITY_SYSTEM.pkl",  # Local dev
                 "../Action/HYBRID_ULTIMATE_V2_CLEAN.pkl",  # Old path
                 "models/MAMBA_MENTALITY_SYSTEM.pkl",  # Alternative
             ]
+            
             for path in possible_paths:
                 if os.path.exists(path):
                     model_path = path
+                    print(f"✅ Found model at: {path}")
                     break
             
-            # If still not found, try to download from Google Drive
+            # If still not found, download from Google Drive to /tmp
             if model_path is None:
                 print("⬇️ Model not found locally, attempting Google Drive download...")
+                print(f"   Downloading to: {railway_model_path}")
                 try:
                     from download_mamba_model import download_mamba_model
-                    if download_mamba_model():
-                        model_path = "MAMBA_MENTALITY_SYSTEM.pkl"
-                        print("✅ Model downloaded successfully!")
+                    
+                    # Download to /tmp on Railway (persists during runtime)
+                    if download_mamba_model(output_path=railway_model_path):
+                        model_path = railway_model_path
+                        print(f"✅ Model downloaded successfully to {railway_model_path}!")
+                        print(f"   (Will persist for this session, re-download on next deploy)")
                     else:
                         print("❌ Model download failed")
                 except Exception as e:
                     print(f"❌ Download error: {e}")
+                    import traceback
+                    traceback.print_exc()
         
         if model_path and os.path.exists(model_path):
             print(f"📂 Loading model: {model_path}")
