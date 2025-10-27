@@ -23,6 +23,7 @@ sys.path.append('../4. Risk')
 from nba_live_scores import NBALiveScores
 from betonline_live_lines import BetOnlineScraper, MultiBookLineScraper
 from game_data_logger import get_logger
+from mamba_auto_logger import MambaAutoLogger  # NEW: Automatic logging
 from mamba_betting_config import (
     BETTING_STRATEGY, 
     BETTING_STRATEGIES, 
@@ -110,6 +111,11 @@ class LiveTradingEngine:
         self.prediction_file = "mamba_predictions.json"
         self.mamba_scores_storage = {}  # Store Mamba scores after 6:00 mark
         print("🎯 Initializing Mamba prediction storage...")
+        
+        # NEW: Initialize automatic logger for daily review
+        print("📝 Initializing Mamba Auto-Logger...")
+        self.auto_logger = MambaAutoLogger(log_dir="mamba_logs")
+        print("✅ Auto-Logger ready: Logs stored in mamba_logs/")
         
         try:
             print("🎯 Initializing OntoRisk...")
@@ -586,6 +592,22 @@ class LiveTradingEngine:
             
             # ENHANCED: Store Mamba score after 6:00 mark passes
             self._store_mamba_score_after_6min(game, prediction)
+        
+        # NEW: Auto-log prediction for daily review
+        try:
+            self.auto_logger.log_prediction(
+                game_id=game['game_id'],
+                game_data=game,
+                prediction=prediction,
+                odds=line,
+                features=features.tolist() if features is not None else None,
+                metadata={
+                    'model_loaded': self.model is not None,
+                    'ontorisk_enabled': self.ontorisk_enabled
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Auto-logger error: {e}")
         
         # Calculate edge
         spread_line = line['spread']

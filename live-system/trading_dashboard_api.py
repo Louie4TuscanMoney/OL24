@@ -419,6 +419,70 @@ async def get_stored_mamba_scores():
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.get("/api/mamba-daily-log")
+async def get_mamba_daily_log(date: str = None):
+    """
+    Get Mamba daily log with full prediction details
+    
+    Args:
+        date: Date string (YYYY-MM-DD), defaults to today
+    
+    Returns:
+        Daily log with all predictions and summary
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    try:
+        summary = trading_engine.auto_logger.get_daily_summary(date)
+        return {
+            "daily_summary": summary,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/mamba-update-outcome")
+async def update_mamba_outcome(request: dict):
+    """
+    Update outcome for a Mamba prediction
+    
+    Body:
+        {
+            "game_id": "0022500123",
+            "final_home_score": 112,
+            "final_away_score": 108,
+            "bet_placed": true,
+            "bet_amount": 100,
+            "bet_result": "win"
+        }
+    
+    Returns:
+        Updated outcome confirmation
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    try:
+        trading_engine.auto_logger.update_outcome(
+            game_id=request.get('game_id'),
+            final_home_score=request.get('final_home_score'),
+            final_away_score=request.get('final_away_score'),
+            bet_placed=request.get('bet_placed', False),
+            bet_amount=request.get('bet_amount', 0),
+            bet_result=request.get('bet_result')
+        )
+        
+        return {
+            "status": "✅ Outcome updated!",
+            "game_id": request.get('game_id'),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/api/betonline/live/{game_id}")
 async def get_betonline_for_game(game_id: str):
     """
