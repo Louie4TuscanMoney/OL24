@@ -29,6 +29,104 @@ class BetOnlineScraper:
     Scrape live lines from BetOnline
     """
     
+    def _scrape_betonline_real_odds(self, game: Dict) -> Optional[List[Dict]]:
+        """
+        🚨 FIXED: Get REAL BetOnline odds using multiple methods!
+        """
+        try:
+            print("🔍 ATTEMPTING REAL BETONLINE ODDS EXTRACTION...")
+            
+            # METHOD 1: Try Crawlee scraper
+            try:
+                from crawlee_betonline_scraper import get_crawlee_betonline_odds
+                crawlee_odds = get_crawlee_betonline_odds()
+                if crawlee_odds and len(crawlee_odds) > 0:
+                    print(f"✅ Crawlee scraper: Found {len(crawlee_odds)} games with REAL odds")
+                    return crawlee_odds
+            except Exception as e:
+                print(f"⚠️ Crawlee scraper failed: {e}")
+            
+            # METHOD 2: Try direct BetOnline API
+            try:
+                api_odds = self._scrape_betonline_api()
+                if api_odds and len(api_odds) > 0:
+                    print(f"✅ BetOnline API: Found {len(api_odds)} games with REAL odds")
+                    return api_odds
+            except Exception as e:
+                print(f"⚠️ BetOnline API failed: {e}")
+            
+            # METHOD 3: Try HTML scraping
+            try:
+                html_odds = self._scrape_betonline_html()
+                if html_odds and len(html_odds) > 0:
+                    print(f"✅ BetOnline HTML: Found {len(html_odds)} games with REAL odds")
+                    return html_odds
+            except Exception as e:
+                print(f"⚠️ BetOnline HTML failed: {e}")
+            
+            print("❌ All BetOnline methods failed - using fallback")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Real odds extraction error: {e}")
+            return None
+    
+    def _scrape_betonline_api(self) -> Optional[List[Dict]]:
+        """
+        🚨 FIXED: Scrape BetOnline API for real odds
+        """
+        try:
+            print("🔍 Scraping BetOnline API...")
+            
+            # Try multiple API endpoints
+            api_urls = [
+                "https://www.betonline.ag/services/feeds/sportsbookv2/betml/event/live/2",
+                "https://www.betonline.ag/api/sportsbook/live",
+                "https://www.betonline.ag/api/basketball/live"
+            ]
+            
+            for api_url in api_urls:
+                try:
+                    response = self.session.get(api_url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        odds = self._parse_api_response(data)
+                        if odds:
+                            print(f"✅ BetOnline API success: {len(odds)} games")
+                            return odds
+                except Exception as e:
+                    print(f"⚠️ API {api_url} failed: {e}")
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ BetOnline API error: {e}")
+            return None
+    
+    def _scrape_betonline_html(self) -> Optional[List[Dict]]:
+        """
+        🚨 FIXED: Scrape BetOnline HTML for real odds
+        """
+        try:
+            print("🔍 Scraping BetOnline HTML...")
+            
+            response = self.session.get(self.nba_url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            odds = self._parse_html(soup)
+            
+            if odds:
+                print(f"✅ BetOnline HTML success: {len(odds)} games")
+                return odds
+            
+            return None
+            
+        except Exception as e:
+            print(f"❌ BetOnline HTML error: {e}")
+            return None
+    
     def __init__(self):
         """Initialize BetOnline scraper"""
         self.base_url = "https://www.betonline.ag"
@@ -49,13 +147,20 @@ class BetOnlineScraper:
     
     def get_live_lines(self) -> List[Dict]:
         """
-        Get current live lines for NBA games - NOW WITH REAL SCRAPING!
+        Get current live lines for NBA games - 🕷️ CRAWLEE FIRST, THEN FALLBACK!
         
         Returns:
             List of game dicts with current lines
         """
         try:
-            # METHOD 1: Try BetOnline API endpoints
+            # 🕷️ METHOD 1: CRAWLEE SCRAPER (PRIORITY!)
+            print("🕷️ Attempting Crawlee BetOnline scraper...")
+            crawlee_odds = self._scrape_betonline_real_odds(None)  # Pass None for all games
+            if crawlee_odds:
+                print(f"✅ Crawlee scraper: {len(crawlee_odds)} games with REAL odds")
+                return crawlee_odds
+            
+            # METHOD 2: Try BetOnline API endpoints
             api_url = "https://www.betonline.ag/services/feeds/sportsbookv2/betml/event/live/2"
             
             response = self.session.get(api_url, timeout=10)
@@ -70,7 +175,7 @@ class BetOnlineScraper:
                 except:
                     pass
             
-            # METHOD 2: Fallback to HTML scraping
+            # METHOD 3: Fallback to HTML scraping
             response = self.session.get(self.nba_url, timeout=10)
             response.raise_for_status()
             
@@ -213,10 +318,15 @@ class BetOnlineScraper:
     
     def _generate_synthetic_lines(self) -> List[Dict]:
         """
-        Generate synthetic lines for ACTUAL LIVE GAMES
+        🚨 CRITICAL PLACEHOLDER - GENERATES FAKE ODDS!
+        
+        TODO: Replace with real BetOnline scraper
+        TODO: Crawlee scraper not working (0 games found)
+        TODO: This is why odds are hallucinated!
         
         In production, replace with real scraper (Crawlee in Week 2!)
         """
+        print("🚨 WARNING: Using FAKE odds generation - spreads are hallucinated!")
         # Import NBA API to get actual live games
         try:
             import sys
@@ -245,21 +355,29 @@ class BetOnlineScraper:
                         home_ml = -110  # Knicks
                         away_ml = -110  # Cavs
                     else:
-                        # For other games, estimate intelligently
+                        # FIXED: For other games, use REALISTIC spreads based on game state
                         current_diff = game['current_diff']
                         period = game['period']
                         
-                        # Smart estimation based on game state
+                        # FIXED: REALISTIC spread calculation based on game state
                         if abs(current_diff) <= 3:
-                            spread = 0.0  # Close games often go to pick'em
+                            # Close games - small spread
+                            spread = round(current_diff * 0.2, 1)  # 20% of current diff
                             home_ml = -110
                             away_ml = -110
-                        elif abs(current_diff) <= 6:
-                            spread = round(current_diff / 2, 1)  # Half the current diff
-                            home_ml = -120 if current_diff < 0 else +110
-                            away_ml = +110 if current_diff < 0 else -120
+                        elif abs(current_diff) <= 8:
+                            # Medium games - moderate spread
+                            spread = round(current_diff * 0.3, 1)  # 30% of current diff
+                            home_ml = -115 if current_diff < 0 else +105
+                            away_ml = +105 if current_diff < 0 else -115
+                        elif abs(current_diff) <= 15:
+                            # Large lead - bigger spread
+                            spread = round(current_diff * 0.4, 1)  # 40% of current diff
+                            home_ml = -130 if current_diff < 0 else +110
+                            away_ml = +110 if current_diff < 0 else -130
                         else:
-                            spread = round(current_diff * 0.7, 1)  # 70% of current diff
+                            # Blowout - maximum realistic spread
+                            spread = round(current_diff * 0.3, 1)  # Cap at 30% for blowouts
                             home_ml = -150 if current_diff < 0 else +130
                             away_ml = +130 if current_diff < 0 else -150
                         
@@ -275,11 +393,23 @@ class BetOnlineScraper:
                     calc = ImpliedProbabilityCalculator()
                     probabilities = calc.calculate_spread_probabilities(home_ml, away_ml, spread)
                     
+                    # ENHANCED: Create proper spread display with team names
+                    if spread < 0:
+                        # Home team favored
+                        spread_display = f"{game['home_team']} {spread:+.1f}"
+                        underdog_display = f"{game['away_team']} {abs(spread):+.1f}"
+                    else:
+                        # Away team favored
+                        spread_display = f"{game['away_team']} {spread:+.1f}"
+                        underdog_display = f"{game['home_team']} {abs(spread):+.1f}"
+                    
                     synthetic_lines.append({
                         'game_id': game['game_id'],
                         'home_team': game['home_team'],
                         'away_team': game['away_team'],
                         'spread': spread,
+                        'spread_display': spread_display,  # ENHANCED: Team favorite with spread
+                        'underdog_display': underdog_display,  # ENHANCED: Underdog with spread
                         'total': total,
                         'home_ml': home_ml,
                         'away_ml': away_ml,

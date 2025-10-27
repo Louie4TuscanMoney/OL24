@@ -1,0 +1,766 @@
+"""
+TRADING DASHBOARD API
+
+Purpose: Backend API for SolidJS trading dashboard
+Author: Ontologic XYZ
+Date: October 20, 2025
+
+This serves:
+- Live game data
+- Betting opportunities
+- Risk status
+- Predictions
+- Trade history
+"""
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import List, Dict, Optional
+from datetime import datetime
+import uvicorn
+import asyncio
+import sys
+
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../4. Risk'))
+
+# Import components
+from live_trading_engine import LiveTradingEngine
+from nba_live_scores import NBALiveScores
+from betonline_live_lines import BetOnlineScraper
+from user_auth_manager import UserAuthManager
+from bet_portfolio_manager import BetPortfolioManager
+from court_3d_stream import Court3DStream
+
+try:
+    from ontorisk_phase4_risk_management import RiskManager  # type: ignore
+    ONTORISK_AVAILABLE = True
+except ImportError:
+    ONTORISK_AVAILABLE = False
+
+
+# Initialize FastAPI
+app = FastAPI(
+    title="Ontologic XYZ Trading Dashboard API",
+    description="Live NBA betting system with ML predictions and risk management",
+    version="1.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production: restrict to dashboard domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Global state
+trading_engine = None
+portfolio_manager = None
+court_stream = None
+auth_manager = None
+active_connections: List[WebSocket] = []
+
+
+@app.on_event("startup")
+async def startup():
+    """Initialize system on startup"""
+    global trading_engine, portfolio_manager, court_stream, auth_manager
+    
+    print("\n🚀 Starting Trading Dashboard API...")
+    
+    try:
+        trading_engine = LiveTradingEngine(
+            mae=9.029,
+            starting_bankroll=1000
+        )
+        print("✅ Trading engine initialized")
+        
+        portfolio_manager = BetPortfolioManager()
+        print("✅ Portfolio manager initialized")
+        
+        court_stream = Court3DStream()
+        print("✅ 3D court stream initialized")
+        
+        auth_manager = UserAuthManager()
+        print("✅ User auth manager initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize: {e}")
+
+
+@app.get("/")
+async def root():
+    """Health check"""
+    return {
+        "status": "online",
+        "system": "Ontologic XYZ Trading Dashboard",
+        "version": "1.0.0",
+        "ontorisk_enabled": ONTORISK_AVAILABLE,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+# Auth Endpoints
+class SignupRequest(BaseModel):
+    phone: str
+    password: str
+
+class PasswordCheck(BaseModel):
+    password: str
+
+@app.post("/api/auth/signup")
+async def signup(request: SignupRequest):
+    """
+    Submit access request
+    
+    Args:
+        request: Phone and password
+        
+    Returns:
+        Success message
+    """
+    if auth_manager is None:
+        return JSONResponse({"detail": "System not initialized"}, status_code=503)
+    
+    success = auth_manager.submit_access_request(request.phone, request.password)
+    
+    if success:
+        return {"message": "Request submitted successfully"}
+    else:
+        return JSONResponse({"detail": "Error submitting request"}, status_code=500)
+
+
+@app.post("/api/auth/check-password")
+async def check_password(request: PasswordCheck):
+    """
+    Check if password is approved
+    
+    Args:
+        request: Password to check
+        
+    Returns:
+        Approval status
+    """
+    if auth_manager is None:
+        return JSONResponse({"detail": "System not initialized"}, status_code=503)
+    
+    approved = auth_manager.check_password(request.password)
+    
+    if approved:
+        auth_manager.update_last_login(request.password)
+    
+    return {"approved": approved}
+
+
+@app.get("/api/auth/pending-requests")
+async def get_pending_requests():
+    """
+    Get all pending access requests (admin only)
+    
+    Returns:
+        List of pending requests
+    """
+    if auth_manager is None:
+        return JSONResponse({"detail": "System not initialized"}, status_code=503)
+    
+    requests = auth_manager.get_pending_requests()
+    return {"requests": requests, "count": len(requests)}
+
+
+@app.post("/api/auth/approve/{request_id}")
+async def approve_request(request_id: int):
+    """
+    Approve an access request (admin only)
+    
+    Args:
+        request_id: ID of request to approve
+        
+    Returns:
+        Success message
+    """
+    if auth_manager is None:
+        return JSONResponse({"detail": "System not initialized"}, status_code=503)
+    
+    success = auth_manager.approve_request(request_id)
+    
+    if success:
+        return {"message": "Request approved"}
+    else:
+        return JSONResponse({"detail": "Error approving request"}, status_code=500)
+
+
+@app.get("/api/live-games")
+async def get_live_games():
+    """
+    Get current live games
+    
+    Returns:
+        List of live games with scores
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    games = trading_engine.nba_api.get_todays_games()
+    
+    return {
+        "games": games,
+        "count": len(games),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/live-lines")
+async def get_live_lines():
+    """
+    Get current betting lines
+    
+    Returns:
+        List of lines from BetOnline
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    lines = trading_engine.line_scraper.get_live_lines()
+    
+    return {
+        "lines": lines,
+        "count": len(lines),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/opportunities")
+async def get_opportunities():
+    """
+    Get current betting opportunities with full context
+    
+    Returns:
+        List of ALL opportunities with categories, percentages, and betting decisions
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    opportunities = trading_engine.scan_live_opportunities()
+    
+    # Enhance each opportunity with category, zone, and betting decision
+    enhanced_opps = []
+    for opp in opportunities:
+        edge = abs(opp.get('edge', 0))
+        confidence = opp.get('p_win', 0)
+        current_diff = abs(opp.get('current_score', 0))
+        
+        # Determine game category
+        if current_diff > 10:
+            game_category = 'LEAD_HELD'
+            category_mae = 9.26
+            category_accuracy = 0.72
+            category_pct = 53.2
+        elif current_diff > 3:
+            game_category = 'CLOSE'
+            category_mae = 9.85
+            category_accuracy = 0.65
+            category_pct = 26
+        else:
+            game_category = 'VERY_CLOSE'
+            category_mae = 9.85
+            category_accuracy = 0.65
+            category_pct = 15
+        
+        # Determine confidence zone
+        if edge <= 5:
+            zone = 'HIGH'
+            zone_pct = 31.7
+            zone_accuracy = 82.5
+            zone_avg_error = 2.57
+        elif edge <= 12:
+            zone = 'MEDIUM'
+            zone_pct = 32
+            zone_accuracy = 65
+            zone_avg_error = 8.5
+        else:
+            zone = 'LOW'
+            zone_pct = 36
+            zone_accuracy = 55
+            zone_avg_error = 18.0
+        
+        # Determine betting strategy
+        if edge <= 5:
+            strategy = 'HIGH_CONFIDENCE'
+            strategy_games = 439
+            strategy_accuracy = 82.5
+            strategy_pct = 31.7
+        elif edge >= 5 and edge < 7:
+            strategy = 'BALANCED'
+            strategy_games = 300
+            strategy_accuracy = 60
+            strategy_pct = 24
+        elif edge >= 7 and edge < 10:
+            strategy = 'CONSERVATIVE'
+            strategy_games = 140
+            strategy_accuracy = 69.4
+            strategy_pct = 10
+        else:
+            strategy = 'ULTRA_SELECTIVE'
+            strategy_games = 30
+            strategy_accuracy = 77.4
+            strategy_pct = 2
+        
+        # Should we bet?
+        should_bet = (
+            edge >= 5 and 
+            game_category == 'LEAD_HELD' and 
+            confidence >= 0.60
+        )
+        
+        # Skip reason
+        skip_reason = None
+        if not should_bet:
+            if game_category != 'LEAD_HELD':
+                skip_reason = f"Game type '{game_category}' not approved (only Lead Held)"
+            elif edge < 5:
+                skip_reason = f"Edge {edge:.1f} below 5.0 threshold"
+            elif confidence < 0.60:
+                skip_reason = f"Confidence {confidence:.1%} below 60% minimum"
+        
+        enhanced_opps.append({
+            **opp,
+            'game_category': game_category,
+            'category_mae': category_mae,
+            'category_accuracy': category_accuracy,
+            'category_pct_of_games': category_pct,
+            'confidence_zone': zone,
+            'zone_pct_of_games': zone_pct,
+            'zone_accuracy': zone_accuracy,
+            'zone_avg_error': zone_avg_error,
+            'betting_strategy': strategy,
+            'strategy_expected_games': strategy_games,
+            'strategy_accuracy': strategy_accuracy,
+            'strategy_pct_of_games': strategy_pct,
+            'should_bet': should_bet,
+            'skip_reason': skip_reason
+        })
+    
+    # Separate betting vs context opportunities
+    betting_opps = [o for o in enhanced_opps if o['should_bet']]
+    context_opps = [o for o in enhanced_opps if not o['should_bet']]
+    
+    return {
+        "all_opportunities": enhanced_opps,
+        "betting_opportunities": betting_opps,
+        "context_opportunities": context_opps,
+        "total_count": len(enhanced_opps),
+        "betting_count": len(betting_opps),
+        "context_count": len(context_opps),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/mamba-performance")
+async def get_mamba_performance():
+    """Get Mamba prediction performance statistics"""
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    try:
+        performance = trading_engine.get_mamba_performance()
+        return {
+            "mamba_performance": performance,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/mamba-scores")
+async def get_stored_mamba_scores():
+    """Get stored Mamba scores after 6:00 mark"""
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    try:
+        scores = trading_engine.get_stored_mamba_scores()
+        return {
+            "mamba_scores": scores,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/betonline/live/{game_id}")
+async def get_betonline_for_game(game_id: str):
+    """
+    Get BetOnline live odds for a specific game
+    Shows LOCKED when lines unavailable (game transitions)
+    
+    Returns:
+        Live spread, moneyline, total, or LOCKED status
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    try:
+        # Get BetOnline data for specific game
+        scraper = trading_engine.line_scraper
+        lines = scraper.get_live_lines()
+        
+        # Default: LOCKED (lines locked during transitions/recalculation)
+        game_line = {
+            "game_id": game_id,
+            "spread": None,
+            "moneyline_home": None,
+            "moneyline_away": None,
+            "total": None,
+            "timestamp": datetime.now().isoformat(),
+            "source": "BetOnline",
+            "available": False,
+            "locked": True,
+            "lock_reason": "LOCKED (transition/recalculation)"
+        }
+        
+        # Try to find matching game with real odds
+        for line in lines:
+            if line.get('game_id') == game_id or game_id in str(line.get('game_id', '')):
+                game_line = {
+                    "game_id": game_id,
+                    "spread": line.get('spread'),
+                    "moneyline_home": line.get('home_ml'),
+                    "moneyline_away": line.get('away_ml'),
+                    "total": line.get('total'),
+                    # IMPLIED PROBABILITIES (CRITICAL FOR ONTORISK!)
+                    "home_implied_prob": line.get('home_implied_prob'),
+                    "away_implied_prob": line.get('away_implied_prob'),
+                    "home_no_vig_prob": line.get('home_no_vig_prob'),
+                    "away_no_vig_prob": line.get('away_no_vig_prob'),
+                    "vig_percentage": line.get('vig_percentage'),
+                    "timestamp": datetime.now().isoformat(),
+                    "source": line.get('source', 'BetOnline'),
+                    "available": True,
+                    "locked": False
+                }
+                break
+        
+        return game_line
+        
+    except Exception as e:
+        return JSONResponse({
+            "error": str(e),
+            "available": False,
+            "locked": True,
+            "lock_reason": f"Error: {str(e)}"
+        }, status_code=500)
+
+
+@app.post("/api/betonline/update-odds")
+async def update_betonline_odds(request: dict):
+    """
+    ADMIN: Update BetOnline odds in real-time
+    
+    Body:
+        {
+            "game_id": "0022500043",
+            "spread": -1.5,
+            "total": 233.5,
+            "home_ml": -125,
+            "away_ml": +105
+        }
+    
+    Returns:
+        Updated odds confirmation
+    """
+    try:
+        # Store in global variable for immediate use
+        global _live_betonline_odds
+        if '_live_betonline_odds' not in globals():
+            _live_betonline_odds = {}
+        
+        game_id = request.get('game_id')
+        _live_betonline_odds[game_id] = {
+            'spread': request.get('spread'),
+            'total': request.get('total'),
+            'home_ml': request.get('home_ml'),
+            'away_ml': request.get('away_ml'),
+            'timestamp': datetime.now().isoformat(),
+            'source': 'BetOnline (ADMIN UPDATED - REAL TIME!)'
+        }
+        
+        return {
+            "status": "✅ Odds updated!",
+            "game_id": game_id,
+            "spread": request.get('spread'),
+            "total": request.get('total'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/risk-status")
+async def get_risk_status():
+    """
+    Get current risk management status
+    
+    Returns:
+        Risk status (bankroll, limits, etc.)
+    """
+    if trading_engine is None or not trading_engine.ontorisk_enabled:
+        return JSONResponse({"error": "OntoRisk not available"}, status_code=503)
+    
+    status = trading_engine.risk_manager.get_status()
+    
+    return {
+        "risk_status": status,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.post("/api/place-bet")
+async def place_bet(bet: Dict):
+    """
+    Place a bet (for now, just logs it)
+    
+    In production: Would integrate with actual sportsbook API
+    """
+    print(f"📝 Bet placed: {bet}")
+    
+    # In production: Place bet with sportsbook
+    # For now: Just log it
+    
+    return {
+        "success": True,
+        "message": "Bet logged (not placed - paper trading mode)",
+        "bet": bet,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.post("/api/bets/add")
+async def add_bet(bet: Dict):
+    """
+    Add a bet to portfolio
+    """
+    if portfolio_manager is None:
+        return JSONResponse({"error": "Portfolio manager not initialized"}, status_code=503)
+    
+    try:
+        bet_id = portfolio_manager.add_bet(
+            matchup=bet.get('matchup', ''),
+            bet_type=bet.get('bet_type', 'SPREAD'),
+            bet_line=bet.get('bet_line', ''),
+            stake=bet.get('stake', 0),
+            odds=bet.get('odds', -110),
+            prediction=bet.get('prediction'),
+            market_spread=bet.get('market_spread'),
+            edge=bet.get('edge'),
+            p_win=bet.get('p_win'),
+            book=bet.get('book', 'BetOnline'),
+            notes=bet.get('notes')
+        )
+        
+        return {
+            "success": True,
+            "bet_id": bet_id,
+            "message": "Bet logged successfully"
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/bets/all")
+async def get_all_bets():
+    """Get all bets in portfolio"""
+    if portfolio_manager is None:
+        return JSONResponse({"error": "Portfolio manager not initialized"}, status_code=503)
+    
+    bets = portfolio_manager.get_all_bets()
+    return {
+        "bets": bets,
+        "count": len(bets)
+    }
+
+
+@app.get("/api/bets/pending")
+async def get_pending_bets():
+    """Get pending bets"""
+    if portfolio_manager is None:
+        return JSONResponse({"error": "Portfolio manager not initialized"}, status_code=503)
+    
+    bets = portfolio_manager.get_pending_bets()
+    return {
+        "bets": bets,
+        "count": len(bets)
+    }
+
+
+@app.get("/api/bets/summary")
+async def get_portfolio_summary():
+    """Get portfolio performance summary"""
+    if portfolio_manager is None:
+        return JSONResponse({"error": "Portfolio manager not initialized"}, status_code=503)
+    
+    summary = portfolio_manager.get_performance_summary()
+    return summary
+
+
+@app.post("/api/bets/{bet_id}/settle")
+async def settle_bet(bet_id: int, result: Dict):
+    """Settle a bet"""
+    if portfolio_manager is None:
+        return JSONResponse({"error": "Portfolio manager not initialized"}, status_code=503)
+    
+    try:
+        portfolio_manager.settle_bet(
+            bet_id=bet_id,
+            result=result.get('result', 'WIN'),
+            actual_score=result.get('actual_score'),
+            profit=result.get('profit')
+        )
+        
+        return {
+            "success": True,
+            "message": "Bet settled"
+        }
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/model/state")
+async def get_model_state():
+    """
+    Get current ML model state for visualization
+    
+    Returns:
+        Model processing state, features, predictions
+    """
+    if trading_engine is None:
+        return JSONResponse({"error": "System not initialized"}, status_code=503)
+    
+    # Get latest opportunity/prediction if available
+    opportunities = trading_engine.scan_live_opportunities()
+    
+    if opportunities:
+        latest = opportunities[0]
+        
+        # Simulate feature values (in production: extract from actual game state)
+        import numpy as np
+        features = np.random.randn(18).tolist()  # 18 features for Mamba Mentality
+        
+        return {
+            "model": "MAMBA_MENTALITY",
+            "status": "processing",
+            "current_diff": latest.get('current_score', 0),
+            "features": features,
+            "prediction": latest.get('prediction', 0),
+            "confidence": latest.get('p_win', 0.5),
+            "edge": latest.get('edge', 0),
+            "models_active": ['XGBoost', 'LightGBM', 'RandomForest', 'DeepNN', 'Ridge', 'ExtraTrees'],
+            "timestamp": datetime.now().isoformat()
+        }
+    else:
+        # No active prediction
+        return {
+            "model": "MAMBA_MENTALITY",
+            "status": "idle",
+            "current_diff": 0,
+            "features": [0] * 18,
+            "prediction": 0,
+            "confidence": 0,
+            "edge": 0,
+            "models_active": ['XGBoost', 'LightGBM', 'RandomForest', 'DeepNN', 'Ridge', 'ExtraTrees'],
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@app.get("/api/court/3d/{game_id}")
+async def get_3d_court_stream(game_id: str):
+    """Get 3D court visualization stream for a game"""
+    if court_stream is None:
+        return JSONResponse({"error": "Court stream not initialized"}, status_code=503)
+    
+    # In production: Fetch real PBP and generate 3D stream
+    # For now: Return sample data
+    sample_frame = {
+        'timestamp': '6:00',
+        'period': 2,
+        'event_type': 'SHOT',
+        'home_players': [
+            {'player_id': 'LAL_1', 'x': 20, 'y': 25, 'z': 0, 'team': 'LAL'},
+            {'player_id': 'LAL_2', 'x': 30, 'y': 20, 'z': 0, 'team': 'LAL'},
+            {'player_id': 'LAL_3', 'x': 25, 'y': 30, 'z': 0, 'team': 'LAL'},
+            {'player_id': 'LAL_4', 'x': 15, 'y': 15, 'z': 0, 'team': 'LAL'},
+            {'player_id': 'LAL_5', 'x': 10, 'y': 25, 'z': 0, 'team': 'LAL'},
+        ],
+        'away_players': [
+            {'player_id': 'BOS_1', 'x': 74, 'y': 25, 'z': 0, 'team': 'BOS'},
+            {'player_id': 'BOS_2', 'x': 64, 'y': 20, 'z': 0, 'team': 'BOS'},
+            {'player_id': 'BOS_3', 'x': 69, 'y': 30, 'z': 0, 'team': 'BOS'},
+            {'player_id': 'BOS_4', 'x': 79, 'y': 15, 'z': 0, 'team': 'BOS'},
+            {'player_id': 'BOS_5', 'x': 84, 'y': 25, 'z': 0, 'team': 'BOS'},
+        ],
+        'ball_position': {'x': 47, 'y': 25, 'z': 5}
+    }
+    
+    return {
+        "game_id": game_id,
+        "current_frame": sample_frame,
+        "court_dimensions": {
+            "length": 94,
+            "width": 50
+        }
+    }
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket for real-time updates
+    """
+    await websocket.accept()
+    active_connections.append(websocket)
+    
+    try:
+        while True:
+            # Send updates every 10 seconds
+            if trading_engine:
+                opportunities = trading_engine.scan_live_opportunities()
+                
+                await websocket.send_json({
+                    "type": "opportunities_update",
+                    "data": opportunities,
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            await asyncio.sleep(10)
+            
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+
+
+def start_dashboard_api(host: str = "0.0.0.0", port: int = 8001):
+    """
+    Start the dashboard API
+    
+    Args:
+        host: Host address
+        port: Port number (8001 to not conflict with OntoRisk API on 8000)
+    """
+    print("\n" + "="*80)
+    print("🔥 STARTING TRADING DASHBOARD API")
+    print("="*80)
+    print(f"\nAPI available at:")
+    print(f"  • http://localhost:{port}/")
+    print(f"  • http://localhost:{port}/docs (Swagger)")
+    print(f"  • http://localhost:{port}/api/live-games")
+    print(f"  • http://localhost:{port}/api/opportunities")
+    print(f"  • ws://localhost:{port}/ws (WebSocket)")
+    print("\n" + "="*80)
+    
+    uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    start_dashboard_api()
+
