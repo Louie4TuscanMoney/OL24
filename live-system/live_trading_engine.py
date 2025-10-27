@@ -11,6 +11,7 @@ This is the COMPLETE integration that runs the live trading system.
 import numpy as np
 import pickle
 import sys
+import os  # ⚡ CRITICAL: Needed for os.path.exists() and file operations!
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime
