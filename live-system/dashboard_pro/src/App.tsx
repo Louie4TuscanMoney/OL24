@@ -7,7 +7,7 @@ import MLModelVisualization3D from './components/MLModelVisualization3D';
 import OpportunityCard from './components/OpportunityCard';
 import GameDetailModal from './components/GameDetailModal';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const API_URL = import.meta.env.VITE_API_URL || 'https://ol24-production.up.railway.app';
 const CORRECT_PASSWORD = 'rwwc2018';
 
 interface Game {
