@@ -302,32 +302,84 @@ class MambaLiveFeatureExtractor:
             if cache_key in self.team_history_cache:
                 return self.team_history_cache[cache_key]
             
-            # TODO: Query database for team's last 10 games
-            # For now, use defaults (same as training for games without history)
-            team_form = {
-                'team_diff_lag1': 0.0,
-                'team_mean_lag1': 0.0,
-                'team_diff_rolling3': 0.0,
-                'team_volatility_rolling3': 2.0,
-                'team_form_10games': 0.0,
-                'team_consistency': 10.0
-            }
+            # Get team ID from abbreviation
+            team_id = self._get_team_id(team)
             
-            # Cache it
-            self.team_history_cache[cache_key] = team_form
+            if team_id is None:
+                print(f"⚠️ Unknown team: {team}, using defaults")
+                return self._get_default_team_form()
             
-            return team_form
+            # Fetch last 10 games from NBA API
+            try:
+                from nba_api.stats.endpoints import teamgamelogs
+                import time
+                
+                time.sleep(0.6)  # Rate limiting
+                logs = teamgamelogs.TeamGameLogs(
+                    team_id_nullable=team_id,
+                    season_nullable='2024-25',
+                    timeout=30
+                )
+                df = logs.get_data_frames()[0]
+                
+                # Exclude current game if present
+                df = df[df['GAME_ID'] != current_game_id]
+                
+                if df.empty or len(df) == 0:
+                    print(f"⚠️ No team history for {team}, using defaults")
+                    return self._get_default_team_form()
+                
+                # Calculate team form features from last 10 games
+                plus_minus = df['PLUS_MINUS'].head(10).values
+                
+                team_form = {
+                    'team_diff_lag1': float(plus_minus[0]) if len(plus_minus) > 0 else 0.0,
+                    'team_mean_lag1': float(plus_minus[0]) if len(plus_minus) > 0 else 0.0,
+                    'team_diff_rolling3': float(plus_minus[:3].mean()) if len(plus_minus) >= 3 else 0.0,
+                    'team_volatility_rolling3': float(plus_minus[:3].std()) if len(plus_minus) >= 3 else 2.0,
+                    'team_form_10games': float(plus_minus.mean()) if len(plus_minus) > 0 else 0.0,
+                    'team_consistency': 1.0 / (float(plus_minus.std()) + 1.0) if len(plus_minus) > 1 else 10.0
+                }
+                
+                print(f"✅ Real team form for {team}: L1={team_form['team_diff_lag1']:.1f}, L3={team_form['team_diff_rolling3']:.1f}")
+                
+                # Cache it
+                self.team_history_cache[cache_key] = team_form
+                
+                return team_form
+                
+            except Exception as e:
+                print(f"⚠️ NBA API error for {team}: {e}, using defaults")
+                return self._get_default_team_form()
             
         except Exception as e:
             print(f"⚠️ Team form error: {e}, using defaults")
-            return {
-                'team_diff_lag1': 0.0,
-                'team_mean_lag1': 0.0,
-                'team_diff_rolling3': 0.0,
-                'team_volatility_rolling3': 2.0,
-                'team_form_10games': 0.0,
-                'team_consistency': 10.0
-            }
+            return self._get_default_team_form()
+    
+    def _get_default_team_form(self) -> Dict:
+        """Default team form when API fails or no history"""
+        return {
+            'team_diff_lag1': 0.0,
+            'team_mean_lag1': 0.0,
+            'team_diff_rolling3': 0.0,
+            'team_volatility_rolling3': 2.0,
+            'team_form_10games': 0.0,
+            'team_consistency': 10.0
+        }
+    
+    def _get_team_id(self, team_abbr: str) -> Optional[int]:
+        """Convert team abbreviation to team ID"""
+        team_map = {
+            'ATL': 1610612737, 'BOS': 1610612738, 'BKN': 1610612751, 'CHA': 1610612766,
+            'CHI': 1610612741, 'CLE': 1610612739, 'DAL': 1610612742, 'DEN': 1610612743,
+            'DET': 1610612765, 'GSW': 1610612744, 'HOU': 1610612745, 'IND': 1610612754,
+            'LAC': 1610612746, 'LAL': 1610612747, 'MEM': 1610612763, 'MIA': 1610612748,
+            'MIL': 1610612749, 'MIN': 1610612750, 'NOP': 1610612740, 'NYK': 1610612752,
+            'OKC': 1610612760, 'ORL': 1610612753, 'PHI': 1610612755, 'PHX': 1610612756,
+            'POR': 1610612757, 'SAC': 1610612758, 'SAS': 1610612759, 'TOR': 1610612761,
+            'UTA': 1610612762, 'WAS': 1610612764, 'NY': 1610612752, 'NO': 1610612740
+        }
+        return team_map.get(team_abbr)
 
 
 # ============================================================================
