@@ -97,28 +97,98 @@ active_connections: List[WebSocket] = []
 
 @app.on_event("startup")
 async def startup():
-    """Initialize system on startup"""
-    global trading_engine, portfolio_manager, court_stream, auth_manager
+    """
+    Initialize system on Railway startup
     
-    print("\n🚀 Starting Trading Dashboard API...")
+    This runs automatically when Railway starts the backend.
+    It will:
+    1. Download Mamba model from Google Drive (if not present)
+    2. Initialize NBA API
+    3. Initialize Trading Engine
+    4. Set up OntoRisk
+    
+    CRITICAL: Your computer can be OFF - this runs on Railway 24/7!
+    """
+    global trading_engine, portfolio_manager, court_stream, auth_manager, nba_api
+    
+    print("\n" + "="*80)
+    print("🚀 RAILWAY STARTUP: INITIALIZING AUTONOMOUS SYSTEM")
+    print("="*80 + "\n")
     
     try:
-        trading_engine = LiveTradingEngine(
-            mae=9.029,
-            starting_bankroll=1000
-        )
-        print("✅ Trading engine initialized")
+        # Initialize NBA API first
+        print("🏀 Initializing NBA Live Scores API...")
+        if NBALiveScores:
+            nba_api = NBALiveScores()
+            print("✅ NBA API ready - can fetch live games & play-by-play")
+        else:
+            print("⚠️ NBA API not available")
+            nba_api = None
         
-        portfolio_manager = BetPortfolioManager()
-        print("✅ Portfolio manager initialized")
+        # Initialize Trading Engine (will auto-download Mamba model!)
+        print("\n🐍 Initializing Mamba Trading Engine...")
+        if LiveTradingEngine:
+            trading_engine = LiveTradingEngine(
+                model_path=None,  # ⚡ CRITICAL: Triggers Google Drive auto-download!
+                mae=9.655,  # ✅ CORRECT: Branch B (Final Score) MAE
+                starting_bankroll=1000
+            )
+            print("✅ Trading engine initialized")
+            print(f"   → Mamba model loaded: {trading_engine.model is not None}")
+            print(f"   → OntoRisk enabled: {trading_engine.ontorisk_enabled}")
+            print(f"   → MAE: {trading_engine.mae}")
+        else:
+            print("⚠️ Trading Engine not available")
+            trading_engine = None
         
-        court_stream = Court3DStream()
-        print("✅ 3D court stream initialized")
+        # Initialize Portfolio Manager
+        print("\n💼 Initializing Portfolio Manager...")
+        if BetPortfolioManager:
+            portfolio_manager = BetPortfolioManager()
+            print("✅ Portfolio manager initialized")
+        else:
+            print("⚠️ Portfolio manager not available")
+            portfolio_manager = None
         
-        auth_manager = UserAuthManager()
-        print("✅ User auth manager initialized")
+        # Initialize 3D Court Stream
+        print("\n🏀 Initializing 3D Court Stream...")
+        if Court3DStream:
+            court_stream = Court3DStream()
+            print("✅ 3D court stream initialized")
+        else:
+            print("⚠️ 3D court stream not available")
+            court_stream = None
+        
+        # Initialize User Auth Manager
+        print("\n👥 Initializing User Auth Manager...")
+        if UserAuthManager:
+            auth_manager = UserAuthManager()
+            print("✅ User auth manager initialized")
+        else:
+            print("⚠️ User auth manager not available")
+            auth_manager = None
+        
+        print("\n" + "="*80)
+        print("✅ SYSTEM FULLY INITIALIZED - READY FOR LIVE PREDICTIONS!")
+        print("="*80)
+        print("\n💡 System Status:")
+        print(f"   NBA API: {'✅' if nba_api else '❌'}")
+        print(f"   Mamba Model: {'✅' if trading_engine and trading_engine.model else '❌'}")
+        print(f"   OntoRisk: {'✅' if trading_engine and trading_engine.ontorisk_enabled else '❌'}")
+        print(f"   Portfolio Manager: {'✅' if portfolio_manager else '❌'}")
+        print(f"   3D Court: {'✅' if court_stream else '❌'}")
+        print(f"   Auth System: {'✅' if auth_manager else '❌'}")
+        print("\n🎯 Waiting for live NBA games...")
+        print("   → System will automatically detect Q2 6:00 marks")
+        print("   → Extract 33 real features from play-by-play")
+        print("   → Make Mamba predictions")
+        print("   → Push to Vercel via WebSocket\n")
+        
     except Exception as e:
-        print(f"❌ Failed to initialize: {e}")
+        print(f"\n❌ CRITICAL STARTUP ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        print("\n⚠️ System will continue but predictions may not work!\n")
 
 
 @app.get("/")
