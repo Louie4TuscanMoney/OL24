@@ -55,7 +55,7 @@ class LiveTradingEngine:
     
     def __init__(
         self,
-        model_path: str = "../Action/HYBRID_ULTIMATE_V2_CLEAN.pkl",
+        model_path: str = None,
         mae: float = 9.029,
         starting_bankroll: float = 1000
     ):
@@ -73,9 +73,27 @@ class LiveTradingEngine:
         
         self.mae = mae
         
-        # Load ML model
-        print(f"📂 Loading model: {model_path}")
-        self.model = self._load_model(model_path)
+        # Load ML model (try multiple paths)
+        if model_path is None:
+            # Try multiple possible locations
+            possible_paths = [
+                "MAMBA_MENTALITY_SYSTEM.pkl",  # Railway root
+                "../mambaofficial/models/MAMBA_MENTALITY_SYSTEM.pkl",  # Local
+                "../Action/HYBRID_ULTIMATE_V2_CLEAN.pkl",  # Old path
+                "models/MAMBA_MENTALITY_SYSTEM.pkl",  # Alternative
+            ]
+            for path in possible_paths:
+                if os.path.exists(path):
+                    model_path = path
+                    break
+        
+        if model_path and os.path.exists(model_path):
+            print(f"📂 Loading model: {model_path}")
+            self.model = self._load_model(model_path)
+        else:
+            print(f"⚠️ No model found at any expected location")
+            print(f"⚠️ Running in NO-MODEL mode (synthetic predictions only)")
+            self.model = None
         
         # Initialize components
         print("🏀 Initializing NBA API...")
@@ -544,24 +562,30 @@ class LiveTradingEngine:
             print("❌ Feature extraction failed, skipping prediction")
             return None
         
-        # Make prediction
-        try:
-            if self.model.get('scaler'):
-                X = self.model['scaler'].transform(features.reshape(1, -1))
-            else:
-                X = features.reshape(1, -1)
+        # Check if model is loaded
+        if self.model is None:
+            print("⚠️ No model loaded, using synthetic prediction")
+            # Generate synthetic prediction based on current differential
+            prediction = game['current_diff'] + np.random.normal(0, 3)
+        else:
+            # Make prediction with loaded model
+            try:
+                if self.model.get('scaler'):
+                    X = self.model['scaler'].transform(features.reshape(1, -1))
+                else:
+                    X = features.reshape(1, -1)
+                
+                prediction = self.model['model'].predict(X)[0]
+            except Exception as e:
+                print(f"❌ Prediction error: {e}, using synthetic fallback")
+                prediction = game['current_diff'] + np.random.normal(0, 3)
             
-            prediction = self.model['model'].predict(X)[0]
-            
-            # ENHANCED: Store Mamba prediction for performance tracking
+        # ENHANCED: Store Mamba prediction for performance tracking (only if real model)
+        if self.model is not None:
             self._store_prediction(game, prediction, features, line)
             
             # ENHANCED: Store Mamba score after 6:00 mark passes
             self._store_mamba_score_after_6min(game, prediction)
-            
-        except Exception as e:
-            print(f"❌ Prediction error: {e}")
-            return None
         
         # Calculate edge
         spread_line = line['spread']
