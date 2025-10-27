@@ -1,0 +1,9 @@
+        
+        # Initialize Trading Engine (will auto-download Mamba model!)
+        print("\n🐍 Initializing Mamba Trading Engine...")
+        if LiveTradingEngine:
+            trading_engine = LiveTradingEngine(
+                model_path=None,  # ⚡ CRITICAL: Triggers Google Drive auto-download!
+                mae=9.655,  # ✅ CORRECT: Branch B (Final Score) MAE
+                starting_bankroll=1000
+            )
