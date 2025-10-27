@@ -67,8 +67,88 @@ function App() {
   const [signupSuccess, setSignupSuccess] = createSignal(false);
   const [signupError, setSignupError] = createSignal('');
 
-  // Declare interval variable
-  let interval: number;
+  // WebSocket connection (replaces polling!)
+  let ws: WebSocket | null = null;
+
+  const connectWebSocket = () => {
+    // Determine WebSocket URL from API_URL
+    const wsUrl = API_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws';
+    
+    console.log('🔌 Connecting to WebSocket:', wsUrl);
+    
+    ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log('✅ WebSocket connected!');
+      setIsConnected(true);
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('📦 Received WebSocket message:', message.type);
+        
+        // Backend sends EVERYTHING - frontend just displays!
+        if (message.type === 'update') {
+          setLiveGames(message.live_games || []);
+          setOpportunities(message.opportunities || []);
+          
+          // Update system status
+          if (message.system_status) {
+            setRiskStatus({
+              current_bankroll: message.system_status.current_bankroll,
+              peak_bankroll: message.system_status.starting_bankroll,
+              current_drawdown: 0,
+              daily_loss: 0,
+              can_bet: message.system_status.mamba_loaded,
+              alerts: [],
+              open_positions: 0
+            });
+            
+            setPortfolioSummary({
+              total_bets: message.system_status.total_predictions_today,
+              wins: 0,
+              losses: 0,
+              win_rate: message.system_status.win_rate_today,
+              total_profit: message.system_status.total_profit,
+              roi: message.system_status.roi
+            });
+          }
+          
+          setLastUpdate(new Date().toLocaleTimeString());
+        } else if (message.type === 'error') {
+          console.error('❌ WebSocket error:', message.error);
+          setIsConnected(false);
+        }
+      } catch (error) {
+        console.error('❌ Error parsing WebSocket message:', error);
+      }
+    };
+    
+    ws.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+      setIsConnected(false);
+    };
+    
+    ws.onclose = () => {
+      console.log('❌ WebSocket disconnected, reconnecting in 5s...');
+      setIsConnected(false);
+      
+      // Auto-reconnect after 5 seconds
+      setTimeout(() => {
+        if (isAuthenticated()) {
+          connectWebSocket();
+        }
+      }, 5000);
+    };
+  };
+
+  const disconnectWebSocket = () => {
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+  };
 
   const handleLogin = async (e: Event) => {
     e.preventDefault();
@@ -81,10 +161,9 @@ function App() {
       setIsAuthenticated(true);
       localStorage.setItem('ontologic_auth', 'true');
       
-      // Start fetching data after successful login
+      // Connect to WebSocket (replaces polling!)
       setTimeout(() => {
-        fetchData();
-        interval = setInterval(fetchData, 3000) as unknown as number;  // 3 seconds - MAXIMUM SPEED!
+        connectWebSocket();
       }, 100);
       return;
     }
@@ -97,9 +176,10 @@ function App() {
         setShowError(false);
         setIsAuthenticated(true);
         localStorage.setItem('ontologic_auth', 'true');
+        
+        // Connect to WebSocket
         setTimeout(() => {
-          fetchData();
-          interval = setInterval(fetchData, 10000) as unknown as number;
+          connectWebSocket();
         }, 100);
       } else {
         setShowError(true);
@@ -142,8 +222,8 @@ function App() {
     setIsAuthenticated(false);
     localStorage.removeItem('ontologic_auth');
     setPasswordInput('');
-    // Stop fetching data on logout
-    clearInterval(interval);
+    // Disconnect WebSocket on logout
+    disconnectWebSocket();
   };
 
   const [liveGames, setLiveGames] = createSignal<Game[]>([]);
@@ -210,13 +290,15 @@ function App() {
     const authStatus = localStorage.getItem('ontologic_auth');
     if (authStatus === 'true') {
       setIsAuthenticated(true);
-      // Start fetching data if authenticated
-      fetchData();
-      interval = setInterval(fetchData, 10000) as unknown as number;
+      // Connect to WebSocket if authenticated
+      connectWebSocket();
     }
   });
 
-  onCleanup(() => clearInterval(interval));
+  onCleanup(() => {
+    // Disconnect WebSocket on cleanup
+    disconnectWebSocket();
+  });
 
   const openBetModal = (opp: Opportunity) => {
     setSelectedOpp(opp);
