@@ -24,21 +24,51 @@ import asyncio
 import sys
 
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../4. Risk'))
 
-# Import components
-from live_trading_engine import LiveTradingEngine
-from nba_live_scores import NBALiveScores
-from betonline_live_lines import BetOnlineScraper
-from user_auth_manager import UserAuthManager
-from bet_portfolio_manager import BetPortfolioManager
-from court_3d_stream import Court3DStream
+# Import components (all in same directory on Railway)
+try:
+    from live_trading_engine import LiveTradingEngine
+except ImportError:
+    LiveTradingEngine = None
+    print("⚠️ LiveTradingEngine not available")
 
 try:
+    from nba_live_scores import NBALiveScores
+except ImportError:
+    NBALiveScores = None
+    print("⚠️ NBALiveScores not available")
+
+try:
+    from betonline_live_lines import BetOnlineScraper
+except ImportError:
+    BetOnlineScraper = None
+    print("⚠️ BetOnlineScraper not available")
+
+try:
+    from user_auth_manager import UserAuthManager
+except ImportError:
+    UserAuthManager = None
+    print("⚠️ UserAuthManager not available")
+
+try:
+    from bet_portfolio_manager import BetPortfolioManager
+except ImportError:
+    BetPortfolioManager = None
+    print("⚠️ BetPortfolioManager not available")
+
+try:
+    from court_3d_stream import Court3DStream
+except ImportError:
+    Court3DStream = None
+    print("⚠️ Court3DStream not available")
+
+try:
+    sys.path.append(os.path.join(os.path.dirname(__file__), '../4. Risk'))
     from ontorisk_phase4_risk_management import RiskManager  # type: ignore
     ONTORISK_AVAILABLE = True
 except ImportError:
     ONTORISK_AVAILABLE = False
+    print("⚠️ OntoRisk not available (expected)")
 
 
 # Initialize FastAPI
@@ -739,23 +769,27 @@ async def websocket_endpoint(websocket: WebSocket):
         active_connections.remove(websocket)
 
 
-def start_dashboard_api(host: str = "0.0.0.0", port: int = 8001):
+def start_dashboard_api(host: str = "0.0.0.0", port: int = None):
     """
     Start the dashboard API
     
     Args:
         host: Host address
-        port: Port number (8001 to not conflict with OntoRisk API on 8000)
+        port: Port number (defaults to $PORT env var or 8001)
     """
+    # Use Railway's PORT env var if available, otherwise default to 8001
+    if port is None:
+        port = int(os.getenv("PORT", 8001))
+    
     print("\n" + "="*80)
     print("🔥 STARTING TRADING DASHBOARD API")
     print("="*80)
     print(f"\nAPI available at:")
-    print(f"  • http://localhost:{port}/")
-    print(f"  • http://localhost:{port}/docs (Swagger)")
-    print(f"  • http://localhost:{port}/api/live-games")
-    print(f"  • http://localhost:{port}/api/opportunities")
-    print(f"  • ws://localhost:{port}/ws (WebSocket)")
+    print(f"  • http://0.0.0.0:{port}/")
+    print(f"  • http://0.0.0.0:{port}/docs (Swagger)")
+    print(f"  • http://0.0.0.0:{port}/api/live-games")
+    print(f"  • http://0.0.0.0:{port}/api/opportunities")
+    print(f"  • ws://0.0.0.0:{port}/ws (WebSocket)")
     print("\n" + "="*80)
     
     uvicorn.run(app, host=host, port=port)
