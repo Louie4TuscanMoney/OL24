@@ -1,0 +1,7 @@
+{
+  "buildCommand": "cd live-system/dashboard_pro && npm install && npm run build",
+  "outputDirectory": "live-system/dashboard_pro/dist",
+  "installCommand": "cd live-system/dashboard_pro && npm install",
+  "framework": "vite"
+}
+
