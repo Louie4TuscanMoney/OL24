@@ -84,13 +84,15 @@ def download_mamba_model(output_path: str = "MAMBA_MENTALITY_SYSTEM.pkl") -> boo
         os.makedirs(output_dir, exist_ok=True)
         print(f"📁 Created directory: {output_dir}")
     
-    # Download model
+    # Download model using gdown (handles large files properly!)
     print(f"📦 Downloading Mamba model from Google Drive...")
     print(f"   File ID: {GOOGLE_DRIVE_FILE_ID}")
     print(f"   Output path: {output_path}")
     
     try:
-        download_file_from_google_drive(GOOGLE_DRIVE_FILE_ID, output_path)
+        import gdown
+        url = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}"
+        gdown.download(url, output_path, quiet=False)
         
         # Verify download
         if os.path.exists(output_path):
