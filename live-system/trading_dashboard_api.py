@@ -1006,7 +1006,7 @@ async def build_complete_message() -> dict:
     try:
         # Get live games
         if nba_api:
-            live_games = nba_api.get_live_games()
+            live_games = nba_api.get_todays_games()
         else:
             live_games = []
         
