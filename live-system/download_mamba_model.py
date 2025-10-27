@@ -62,8 +62,8 @@ def download_mamba_model():
     4. Add to Railway startup command
     """
     
-    # Google Drive file ID (REPLACE WITH YOUR FILE ID)
-    GOOGLE_DRIVE_FILE_ID = "YOUR_FILE_ID_HERE"  # Replace this!
+    # Google Drive file ID from shareable link
+    GOOGLE_DRIVE_FILE_ID = "1gGRfh-07VjfD--VjftmUq-G2UtxI1T-7"  # MAMBA_MENTALITY_SYSTEM.pkl
     
     # Model path
     MODEL_PATH = "MAMBA_MENTALITY_SYSTEM.pkl"

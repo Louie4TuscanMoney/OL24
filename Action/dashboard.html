@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏀 NBA Prediction Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 3px solid rgba(255,255,255,0.2);
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .status {
+            font-size: 1.2em;
+            color: #4ade80;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        
+        .games-container {
+            margin-top: 30px;
+        }
+        
+        .game-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .teams {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        
+        .game-time {
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .predictions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .prediction-box {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .prediction-title {
+            font-size: 0.9em;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 10px;
+        }
+        
+        .prediction-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        
+        .bet-recommendation {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        
+        .bet-recommendation.skip {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        
+        .confidence {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .confidence.high {
+            background: #10b981;
+        }
+        
+        .confidence.medium {
+            background: #f59e0b;
+        }
+        
+        .confidence.low {
+            background: #ef4444;
+        }
+        
+        .update-time {
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            margin-top: 30px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #4ade80;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏀 NBA Prediction System</h1>
+            <p class="status">
+                <span class="live-indicator"></span>
+                <span id="status">LIVE - Monitoring Games</span>
+            </p>
+        </header>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Predictions Today</div>
+                <div class="stat-value" id="predictions-count">0</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Bets Placed</div>
+                <div class="stat-value" id="bets-count">0</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Bankroll</div>
+                <div class="stat-value" id="bankroll">$5,000</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-label">Today's P&L</div>
+                <div class="stat-value" id="pnl">$0</div>
+            </div>
+        </div>
+        
+        <div class="games-container">
+            <h2 style="margin-bottom: 20px;">Active Games</h2>
+            <div id="games-list">
+                <div class="game-card">
+                    <div class="game-header">
+                        <div class="teams">Waiting for games...</div>
+                    </div>
+                    <p style="text-align: center; color: rgba(255,255,255,0.7);">
+                        Games start at 7:00 PM ET<br>
+                        System will auto-detect and make predictions
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="update-time">
+            Last updated: <span id="update-time">--</span>
+        </div>
+    </div>
+    
+    <script>
+        // Sample game data structure (will be populated by backend)
+        const sampleGame = {
+            teams: "LAL vs CHI",
+            time: "6:00 2Q",
+            currentScore: "LAL 55 - CHI 48",
+            predictions: {
+                halftime: "+8.5",
+                final: "+12.0"
+            },
+            confidence: "HIGH",
+            betRecommendation: "BET LAL 1H -7.5 ($450)",
+            shouldBet: true
+        };
+        
+        function updateDashboard() {
+            // Update timestamp
+            document.getElementById('update-time').textContent = 
+                new Date().toLocaleTimeString();
+            
+            // In production: Fetch from backend API
+            // For now: Demo data
+            
+            // Auto-refresh every 5 seconds
+            setTimeout(updateDashboard, 5000);
+        }
+        
+        // Start updates
+        updateDashboard();
+        
+        console.log("🎮 Dashboard loaded - ready for Monday!");
+    </script>
+</body>
+</html>
+
+
+

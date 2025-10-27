@@ -467,7 +467,8 @@ def make_live_prediction(
             'feature_vector': features.tolist(),
             'timestamp': datetime.now().isoformat(),
             'model': 'MAMBA_MENTALITY',
-            'mae': 9.029  # Training MAE
+            'branch': 'B',  # Branch B = Final score prediction
+            'mae': 9.655  # Training MAE (Branch B)
         }
         
         print("\n" + "="*80)

@@ -57,7 +57,7 @@ class LiveTradingEngine:
     def __init__(
         self,
         model_path: str = None,
-        mae: float = 9.029,
+        mae: float = 9.655,  # Branch B MAE (final score)
         starting_bankroll: float = 1000
     ):
         """
@@ -74,7 +74,7 @@ class LiveTradingEngine:
         
         self.mae = mae
         
-        # Load ML model (try multiple paths)
+        # Load ML model (try multiple paths + auto-download)
         if model_path is None:
             # Try multiple possible locations
             possible_paths = [
@@ -87,6 +87,19 @@ class LiveTradingEngine:
                 if os.path.exists(path):
                     model_path = path
                     break
+            
+            # If still not found, try to download from Google Drive
+            if model_path is None:
+                print("⬇️ Model not found locally, attempting Google Drive download...")
+                try:
+                    from download_mamba_model import download_mamba_model
+                    if download_mamba_model():
+                        model_path = "MAMBA_MENTALITY_SYSTEM.pkl"
+                        print("✅ Model downloaded successfully!")
+                    else:
+                        print("❌ Model download failed")
+                except Exception as e:
+                    print(f"❌ Download error: {e}")
         
         if model_path and os.path.exists(model_path):
             print(f"📂 Loading model: {model_path}")
@@ -147,231 +160,53 @@ class LiveTradingEngine:
     
     def extract_features_from_live_game(self, game: Dict) -> Optional[np.ndarray]:
         """
-        🚨 FIXED: Extract REAL Mamba features from live game state!
+        Extract REAL 33 Mamba features from live game state using MambaLiveFeatureExtractor
         
         Args:
             game: Live game dict from NBA API
             
         Returns:
-            Feature vector (67 features) matching Mamba training data
+            Feature vector (33 features) matching Mamba training data
         """
         try:
-            print("🔍 EXTRACTING REAL MAMBA FEATURES...")
+            print("🔍 EXTRACTING REAL MAMBA FEATURES (33)...")
             
-            # Get current game state
-            period = game.get('period', 0)
-            clock = game.get('clock', '0:00')
-            home_score = game.get('home_score', 0)
-            away_score = game.get('away_score', 0)
-            current_diff = home_score - away_score
+            # Import the REAL feature extractor
+            from mamba_live_feature_extractor import MambaLiveFeatureExtractor
             
-            # Calculate game progress (0.0 to 1.0)
-            try:
-                if ':' in clock:
-                    minutes, seconds = clock.split(':')
-                    total_minutes = float(minutes) + float(seconds) / 60.0
-                else:
-                    total_minutes = float(clock) if clock else 0.0
-            except:
-                total_minutes = 0.0
+            # Initialize extractor (with caching for efficiency)
+            if not hasattr(self, 'mamba_extractor'):
+                self.mamba_extractor = MambaLiveFeatureExtractor(cache_pbp=True)
             
-            # Game progress calculation
-            if period <= 4:
-                game_progress = (period - 1) * 0.25 + (12 - total_minutes) / 12 * 0.25
-            else:
-                game_progress = 1.0  # Overtime
+            # Get game ID
+            game_id = game.get('game_id', '')
             
-            # 🚨 FIXED: Extract REAL 67 Mamba features (matching training data)
-            features = []
+            # Build current_game_state dict
+            current_game_state = {
+                'home_team': game.get('home_team', ''),
+                'away_team': game.get('away_team', ''),
+                'home_score': game.get('home_score', 0),
+                'away_score': game.get('away_score', 0),
+                'period': game.get('period', 0),
+                'clock': game.get('clock', '0:00')
+            }
             
-            # 1. Pattern features (18) - REAL 18-minute pattern
-            # TODO: Replace with actual historical pattern extraction
-            pattern = self._extract_real_18min_pattern(game, current_diff, game_progress)
-            features.extend(pattern)
+            # Extract REAL 33 features
+            features = self.mamba_extractor.extract_features(game_id, current_game_state)
             
-            # 2. Statistical features (4)
-            features.extend([
-                np.mean(pattern),  # mean_diff
-                np.std(pattern),  # std_diff
-                np.polyfit(range(len(pattern)), pattern, 1)[0],  # trend
-                np.std(np.diff(pattern)) if len(pattern) > 1 else 0  # volatility
-            ])
+            if features is None:
+                print("❌ Mamba feature extraction failed")
+                return None
             
-            # 3. Team form features (6)
-            features.extend([
-                current_diff,  # team_diff_lag1
-                np.mean(pattern),  # team_mean_lag1
-                current_diff,  # team_diff_rolling3
-                2.0,  # team_volatility_rolling3 (default)
-                0.0,  # team_form_10games (default)
-                10.0  # team_consistency (default)
-            ])
-            
-            # 4. Spectral features (6)
-            if len(pattern) > 4:
-                fft_vals = np.abs(np.fft.fft(pattern))[:len(pattern)//2]
-                features.extend([
-                    np.mean(fft_vals),  # spectral_energy
-                    np.std(fft_vals),  # spectral_entropy
-                    np.mean(fft_vals[:len(fft_vals)//3]),  # low_freq_power
-                    np.mean(fft_vals[len(fft_vals)//3:2*len(fft_vals)//3]),  # mid_freq_power
-                    np.mean(fft_vals[2*len(fft_vals)//3:]),  # high_freq_power
-                    np.argmax(fft_vals)  # dominant_freq
-                ])
-            else:
-                features.extend([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-            
-            # 5. Momentum features (6)
-            if len(pattern) > 1:
-                velocity = np.diff(pattern)
-                features.extend([
-                    np.mean(velocity),  # velocity
-                    np.mean(np.diff(velocity)) if len(velocity) > 1 else 0,  # acceleration
-                    np.mean(velocity[-3:]) if len(velocity) >= 3 else np.mean(velocity),  # recent_momentum
-                    len([i for i in range(1, len(pattern)) if (pattern[i] > 0) != (pattern[i-1] > 0)]),  # lead_changes
-                    np.max(pattern) - np.min(pattern),  # max_swing
-                    abs(current_diff) / max(1, home_score + away_score)  # comeback_potential
-                ])
-            else:
-                features.extend([0.0, 0.0, 0.0, 0, 0.0, 0.0])
-            
-            # 6. Autocorrelation features (3)
-            if len(pattern) > 5:
-                features.extend([
-                    np.corrcoef(pattern[:-1], pattern[1:])[0, 1] if len(pattern) > 1 else 0,  # autocorr_lag1
-                    np.corrcoef(pattern[:-3], pattern[3:])[0, 1] if len(pattern) > 3 else 0,  # autocorr_lag3
-                    np.corrcoef(pattern[:-5], pattern[5:])[0, 1] if len(pattern) > 5 else 0   # autocorr_lag5
-                ])
-            else:
-                features.extend([0.0, 0.0, 0.0])
-            
-            # 7. Advanced NBA stats (8) - use defaults for now
-            features.extend([
-                0.5,  # efg_proxy
-                0.5,  # ts_proxy
-                0.0,  # netrtg_proxy
-                0.5,  # pie_proxy
-                0.0,  # pm_proxy
-                0.2,  # usg_proxy
-                100.0,  # pace_proxy
-                0.5   # four_factors_proxy
-            ])
-            
-            return np.array(features, dtype=np.float32)
+            print(f"✅ EXTRACTED {len(features)} REAL MAMBA FEATURES")
+            return features
             
         except Exception as e:
             print(f"❌ Feature extraction error: {e}")
             return None
     
-    def _extract_real_18min_pattern(self, game: Dict, current_diff: float, game_progress: float) -> np.ndarray:
-        """
-        🚨 CRITICAL: Extract REAL 18-minute pattern from historical data!
-        
-        TODO: Implement real pattern extraction from historical games
-        TODO: Use actual game progression data, not synthetic patterns
-        TODO: This is the key to making Mamba predictions real!
-        """
-        try:
-            print("🔍 EXTRACTING REAL 18-MINUTE PATTERN...")
-            
-            # 🚨 PLACEHOLDER: For now, use current game state to build pattern
-            # In production, this would query historical game data
-            
-            # Get current game state
-            period = game.get('period', 1)
-            clock = game.get('clock', '12:00')
-            home_score = game.get('home_score', 0)
-            away_score = game.get('away_score', 0)
-            
-            # Calculate minutes elapsed
-            try:
-                if ':' in clock:
-                    minutes, seconds = clock.split(':')
-                    minutes_elapsed = float(minutes) + float(seconds) / 60.0
-                else:
-                    minutes_elapsed = float(clock) if clock else 0.0
-            except:
-                minutes_elapsed = 0.0
-            
-            # Calculate total minutes in game so far
-            total_minutes = (period - 1) * 12 + (12 - minutes_elapsed)
-            
-            # 🚨 TODO: Replace with real historical pattern extraction
-            # For now, create pattern based on current state
-            pattern = []
-            current_diff = home_score - away_score
-            
-            # Generate realistic pattern leading to current state
-            for minute in range(18):
-                if minute < total_minutes:
-                    # We're in the past - simulate progression to current state
-                    progress = minute / max(1, total_minutes)
-                    # Add realistic variation
-                    variation = np.random.normal(0, 1.5)
-                    diff_at_minute = current_diff * progress + variation
-                    pattern.append(diff_at_minute)
-                else:
-                    # We're in the future - use current state
-                    pattern.append(current_diff)
-            
-            print(f"🔍 REAL PATTERN EXTRACTED: {pattern[:5]}... (first 5 values)")
-            return np.array(pattern, dtype=np.float32)
-            
-        except Exception as e:
-            print(f"❌ Real pattern extraction error: {e}")
-            return np.zeros(18, dtype=np.float32)
-
-    def _generate_live_pattern(self, game: Dict, current_diff: float, game_progress: float) -> np.ndarray:
-        """
-        🚨 CRITICAL PLACEHOLDER - GENERATES FAKE PATTERNS!
-        
-        TODO: Replace with real historical game data
-        TODO: This is why Mamba predictions are meaningless
-        TODO: Need actual 18-minute patterns from past games
-        
-        Args:
-            game: Live game data
-            current_diff: Current score differential
-            game_progress: Game progress (0.0-1.0)
-            
-        Returns:
-            18-minute pattern array (FAKE!)
-        """
-        print("🚨 WARNING: Using FAKE pattern generation - predictions are NOT real!")
-        
-        # 🚨 PLACEHOLDER: Create fake pattern based on current state
-        # This simulates what the 18-minute pattern would look like
-        
-        # Base pattern with current differential
-        base_pattern = np.linspace(0, current_diff, 18)
-        
-        # Add realistic game flow
-        # Early game: more volatile
-        # Late game: more stable
-        if game_progress < 0.5:
-            # Early game - more volatility
-            noise = np.random.normal(0, 2.0, 18)
-        else:
-            # Late game - less volatility
-            noise = np.random.normal(0, 1.0, 18)
-        
-        # Add momentum based on current state
-        if current_diff > 5:
-            # Home team leading - positive momentum
-            momentum = np.linspace(0, 2, 18)
-        elif current_diff < -5:
-            # Away team leading - negative momentum
-            momentum = np.linspace(0, -2, 18)
-        else:
-            # Close game - neutral momentum
-            momentum = np.zeros(18)
-        
-        pattern = base_pattern + noise + momentum
-        
-        # Ensure pattern is realistic (not too extreme)
-        pattern = np.clip(pattern, -20, 20)
-        
-        return pattern
+    # ✅ REMOVED: Old synthetic pattern generation methods
+    # Now using MambaLiveFeatureExtractor for 100% REAL feature extraction!
     
     def _store_prediction(self, game: Dict, prediction: float, features: np.ndarray, line: Dict):
         """

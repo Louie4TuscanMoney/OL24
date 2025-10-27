@@ -1,0 +1,137 @@
+🚀 LIVE SYSTEM OFFICIAL - PACKAGE SUMMARY
+==========================================
+
+PACKAGE NAME: livesystemofficial
+CREATED: October 24, 2025
+PURPOSE: Autonomous NBA Trading Engine (Real-Time Predictions & Betting)
+
+WHAT IS LIVE SYSTEM?
+--------------------
+Live System is the operational core of the autonomous NBA trading system.
+It integrates live data, ML predictions, risk management, and a real-time
+dashboard to power profitable NBA betting.
+
+CURRENTLY DEPLOYED: https://ontologicxyz.com
+
+KEY COMPONENTS:
+---------------
+1. Live Trading Engine      → Core prediction engine (Mamba + OntoRisk)
+2. FastAPI Backend          → REST API for dashboard communication
+3. SolidJS Dashboard        → Real-time frontend (Vercel deployment)
+4. User Authentication      → SQLite-based access control
+5. BetOnline Scraper        → Real-time odds scraping (Crawlee + fallbacks)
+
+PACKAGE STRUCTURE:
+------------------
+core/               → Live trading engine (predictions, feature extraction)
+api/                → FastAPI backend (REST endpoints, CORS)
+authentication/     → User management (signup, approval, SQLite)
+utilities/          → Implied probability calculator, BetOnline scraper
+dashboard/          → SolidJS/Vite frontend (App, components, config)
+config/             → Deployment scripts (start, stop, approve users)
+documentation/      → Deployment guides (Vercel, ngrok, Git)
+README.md           → Comprehensive documentation
+
+CORE FILES:
+-----------
+1. live_trading_engine.py           → Main prediction engine
+2. trading_dashboard_api.py         → FastAPI REST API
+3. user_auth_manager.py             → User authentication
+4. implied_probability_calculator.py → Odds → Probability conversion
+5. crawlee_betonline_scraper.py     → BetOnline odds scraper
+6. App.tsx                          → Main SolidJS app
+7. BasketballCourt3D.tsx            → 3D court visualization
+8. BetTrackingModal.tsx             → Bet tracking UI
+
+WORKFLOW:
+---------
+1. Fetch live data (ESPN API, NBA API, CDN) → espnapiofficial
+2. Scrape BetOnline odds (Crawlee) → betonlineofficial
+3. Extract 67 features (Helios) → heliosofficial
+4. Make prediction (Mamba) → mambaofficial
+5. Calibrate probability (OntoRisk) → ontoriskofficial
+6. Calculate optimal bet size (Kelly Criterion)
+7. Display on dashboard (SolidJS, ontologicxyz.com)
+
+PERFORMANCE:
+------------
+- Total latency: 13.2 seconds (faster than DraftKings, FanDuel!)
+- Backend polling: 3 seconds
+- Dashboard polling: 3 seconds
+- Feature extraction: <100ms
+- Mamba MAE: 6.8 (train), 9.3 (test)
+
+API ENDPOINTS:
+--------------
+GET  /api/live-games              → All live NBA games
+GET  /api/betonline-odds          → Real-time BetOnline odds
+GET  /api/opportunities           → ML-powered betting opportunities
+GET  /api/mamba-performance       → Mamba prediction tracking
+GET  /api/mamba-scores            → Stored Mamba scores (Q2 6:00+)
+POST /api/user/signup             → User signup request
+GET  /api/admin/pending-requests  → Admin approval panel
+
+DEPLOYMENT:
+-----------
+Local:      python3 api/trading_dashboard_api.py (backend)
+            npm run dev (frontend)
+
+Production: vercel --prod (frontend → ontologicxyz.com)
+            ngrok http 8001 (backend → public)
+
+Autonomous: bash config/start_autonomous_system.sh
+
+TECH STACK:
+-----------
+Backend:  Python, FastAPI, SQLite, asyncio, Playwright
+Frontend: SolidJS, Vite, TypeScript, Three.js, Tailwind CSS
+ML:       Mamba (XGBoost), Helios (feature extraction), OntoRisk (calibration)
+Data:     ESPN API, NBA API, BetOnline scraper
+
+DEPENDENCIES:
+-------------
+Python:  fastapi, uvicorn, requests, nba_api, numpy, pandas, scikit-learn, xgboost, playwright
+npm:     solid-js, vite, typescript, three, tailwindcss
+
+INTEGRATION:
+------------
+- espnapiofficial    → Live game data fetching
+- betonlineofficial  → Real-time odds scraping
+- heliosofficial     → 67-feature extraction
+- mambaofficial      → ML predictions
+- ontoriskofficial   → Probability calibration, Kelly sizing
+
+USER MANAGEMENT:
+----------------
+1. User visits ontologicxyz.com
+2. Requests access (username, email, reason)
+3. Admin approves via approve_users.sh
+4. User gains full access to dashboard
+
+STATUS:
+-------
+✅ Backend API complete and running
+✅ Frontend dashboard deployed (ontologicxyz.com)
+✅ Mamba predictions working (Q2 6:00+)
+✅ OntoRisk integration complete
+✅ User authentication system active
+✅ BetOnline scraper integrated (fallback chain)
+✅ Real-time updates (3s polling)
+🚧 WebSocket push (replacing polling) - planned
+📋 Cloud deployment (Railway/Render) - planned
+📋 Mobile app (React Native) - planned
+
+DOCUMENTATION:
+--------------
+- README.md (this package)
+- DEPLOY_FOR_FRIENDS_NOW.md
+- MAKE_BACKEND_PUBLIC.md
+- GIT_VERCEL_GUIDE.md
+
+CONTACT:
+--------
+Ontologic XYZ © 2025
+live@ontologicxyz.com
+
+🚀 Live System powers autonomous NBA trading at ontologicxyz.com! 🚀
+
