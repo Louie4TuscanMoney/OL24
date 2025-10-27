@@ -592,6 +592,83 @@ async def update_betonline_odds(request: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/api/betonline/manual-entry")
+async def manual_betonline_entry(request: dict):
+    """
+    Manually enter REAL BetOnline odds for OntoRisk
+    
+    Body:
+        {
+            "game_id": "0022500123",
+            "home_team": "LAL",
+            "away_team": "GSW",
+            "spread": -6.0,
+            "total": 215.5,
+            "home_ml": -250,
+            "away_ml": +210
+        }
+    
+    Returns:
+        Odds with calculated implied probabilities
+    """
+    try:
+        global _manual_betonline_odds
+        if '_manual_betonline_odds' not in globals():
+            _manual_betonline_odds = {}
+        
+        game_id = request['game_id']
+        home_ml = request['home_ml']
+        away_ml = request['away_ml']
+        
+        # Calculate implied probabilities
+        if home_ml < 0:
+            home_implied = abs(home_ml) / (abs(home_ml) + 100)
+        else:
+            home_implied = 100 / (home_ml + 100)
+        
+        if away_ml < 0:
+            away_implied = abs(away_ml) / (abs(away_ml) + 100)
+        else:
+            away_implied = 100 / (away_ml + 100)
+        
+        total_implied = home_implied + away_implied
+        vig_pct = (total_implied - 1) * 100
+        
+        home_no_vig = home_implied / total_implied
+        away_no_vig = away_implied / total_implied
+        
+        _manual_betonline_odds[game_id] = {
+            'game_id': game_id,
+            'home_team': request['home_team'],
+            'away_team': request['away_team'],
+            'spread': request['spread'],
+            'total': request['total'],
+            'home_ml': home_ml,
+            'away_ml': away_ml,
+            'home_implied_prob': home_implied,
+            'away_implied_prob': away_implied,
+            'home_no_vig_prob': home_no_vig,
+            'away_no_vig_prob': away_no_vig,
+            'vig_percentage': vig_pct,
+            'source': 'BetOnline (MANUAL ENTRY - REAL ODDS)',
+            'entered_at': datetime.now().isoformat()
+        }
+        
+        # Also update the trading engine's scraper cache
+        if trading_engine and hasattr(trading_engine.line_scraper, 'manual_odds_cache'):
+            trading_engine.line_scraper.manual_odds_cache[game_id] = _manual_betonline_odds[game_id]
+        
+        return {
+            "status": "✅ REAL BetOnline odds entered!",
+            "game_id": game_id,
+            "odds": _manual_betonline_odds[game_id],
+            "message": "OntoRisk can now calculate with REAL odds!"
+        }
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/api/risk-status")
 async def get_risk_status():
     """
