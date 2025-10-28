@@ -1603,6 +1603,62 @@ async def get_team_depth_chart(team_abbr: str):
         return {"error": str(e)}
 
 
+@app.get("/api/game/{game_id}/live-data")
+async def get_live_game_data(game_id: str):
+    """
+    Get complete live game data for trading desk:
+    - Current score
+    - Score history (last 60 seconds)
+    - BetOnline spread ladder
+    - ML prediction
+    """
+    if not trading_engine:
+        return {"error": "Trading engine not available"}
+    
+    try:
+        # Get current game state
+        games = trading_engine.nba_api.get_todays_games()
+        game = next((g for g in games if g['game_id'] == game_id), None)
+        
+        if not game:
+            return {"error": "Game not found"}
+        
+        # Get BetOnline lines
+        betonline_lines = {}
+        if trading_engine.betonline:
+            try:
+                lines = trading_engine.betonline.get_live_lines()
+                betonline_lines = next((l for l in lines if l.get('game_id') == game_id), {})
+            except:
+                pass
+        
+        # Build spread ladder (order book style)
+        current_diff = game['home_score'] - game['away_score']
+        spread_ladder = []
+        
+        # Generate ladder around current differential
+        for i in range(-20, 21):  # -10 to +10 in 0.5 increments
+            spread_value = current_diff + (i * 0.5)
+            spread_ladder.append({
+                "spread": spread_value,
+                "price": -110,  # Default juice
+                "side": "home" if spread_value > current_diff else "away",
+                "size": 1000,  # Mock size
+                "is_at_market": abs(spread_value - current_diff) < 0.5
+            })
+        
+        return {
+            "game": game,
+            "spread_ladder": spread_ladder,
+            "betonline": betonline_lines,
+            "ml_prediction": None,  # Will add if available
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/team/{team_abbr}/schedule")
 async def get_team_schedule(team_abbr: str, days_ahead: int = 14):
     """

@@ -9,10 +9,11 @@
  * - Risk Management (5-layer system)
  */
 
-import { Component, For, Show, onMount, onCleanup } from 'solid-js';
+import { Component, For, Show, onMount, onCleanup, createSignal } from 'solid-js';
 import { wsService } from '../services/websocket';
 import GameCardExpanded from './GameCardExpanded';
 import SystemStatus from './SystemStatus';
+import LiveGameTradingDesk from './LiveGameTradingDesk';
 
 const Dashboard: Component = () => {
   // Get signals from WebSocket service (reactive!)
@@ -23,6 +24,9 @@ const Dashboard: Component = () => {
   const [edges] = wsService.edges;
   const [recommendations] = wsService.recommendations;
   const [lastUpdate] = wsService.lastUpdate;
+  
+  // Trading desk view
+  const [tradingDeskGameId, setTradingDeskGameId] = createSignal<string | null>(null);
 
   // Connect on mount
   onMount(() => {
@@ -128,12 +132,21 @@ const Dashboard: Component = () => {
                       prediction={predictions().get(game.game_id)}
                       edge={edges().get(game.game_id)}
                       recommendation={recommendations().get(game.game_id)}
+                      onOpenTradingDesk={() => setTradingDeskGameId(game.game_id)}
                     />
                   )}
                 </For>
               </div>
             </div>
           </div>
+        </Show>
+
+        {/* Trading Desk Full-Screen Modal */}
+        <Show when={tradingDeskGameId()}>
+          <LiveGameTradingDesk
+            gameId={tradingDeskGameId()!}
+            onClose={() => setTradingDeskGameId(null)}
+          />
         </Show>
 
         {/* Footer Info */}

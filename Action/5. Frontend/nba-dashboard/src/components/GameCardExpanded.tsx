@@ -17,6 +17,7 @@ interface Props {
   prediction?: EnhancedPrediction;
   edge?: Edge;
   recommendation?: BettingRecommendation;
+  onOpenTradingDesk?: () => void;
 }
 
 const GameCardExpanded: Component<Props> = (props) => {
@@ -158,6 +159,25 @@ const GameCardExpanded: Component<Props> = (props) => {
                 <div class="text-xs text-gray-500 mt-2">Market Spread</div>
                 <div class="text-sm font-semibold">{props.edge!.market_spread.toFixed(1)}</div>
               </div>
+            </div>
+          </div>
+        </Show>
+
+        {/* Trading Desk Button */}
+        <Show when={props.game.is_live && props.onOpenTradingDesk}>
+          <div class="mt-6 pt-6 border-t border-gray-800">
+            <button
+              onClick={props.onOpenTradingDesk}
+              class="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
+            >
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              <span>Open Trading Desk</span>
+              <span class="px-2 py-1 bg-white/20 rounded text-sm">LIVE ORDER BOOK</span>
+            </button>
+            <div class="text-center text-gray-500 text-xs mt-2">
+              Full-screen view • Pricing ladder • Live graph • 1-second updates
             </div>
           </div>
         </Show>

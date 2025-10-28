@@ -50,7 +50,7 @@ class NBALiveScores:
         self._last_nba_api_call = 0
         self._last_espn_api_call = 0
         self._nba_api_cooldown = 1.0  # Wait 1 second between nba_api calls
-        self._espn_api_cooldown = 0.5  # Wait 0.5 seconds between ESPN calls
+        self._espn_api_cooldown = 0.2  # ⚡ ULTRA-FAST: 0.2s = 5 calls/second max
         
         # Consecutive failures tracking
         self._nba_api_failures = 0
