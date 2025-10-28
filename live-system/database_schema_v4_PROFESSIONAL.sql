@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS teams (
     secondary_color VARCHAR(7),
     
     -- Location & Venue
-    city VARCHAR(50) NOT NULL,
+    city VARCHAR(50),
     state VARCHAR(30),
     arena VARCHAR(100),
     arena_capacity INT,
