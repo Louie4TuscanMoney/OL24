@@ -3,7 +3,7 @@
  * Real-time edge calculations as you type
  */
 
-import { type Component, createSignal, createEffect, Show, For } from 'solid-js';
+import { type Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 import type { NBAGame } from '../types';
 
 interface Game {
@@ -44,6 +44,7 @@ const TradingDesk: Component<{
   const [selectedGame, setSelectedGame] = createSignal<Game | null>(null);
   const [mlPred, setMlPred] = createSignal<MLPrediction | null>(null);
   const [loading, setLoading] = createSignal(false);
+  const [lastUpdate, setLastUpdate] = createSignal<string>('--');
   
   // Odds inputs
   const [spread, setSpread] = createSignal('');
@@ -51,23 +52,53 @@ const TradingDesk: Component<{
   const [homeML, setHomeML] = createSignal('');
   
   let spreadInput: HTMLInputElement | undefined;
+  let pollInterval: number | undefined;
 
-  // Fetch ML when game selected
+  // Fetch ML predictions (continuous polling)
+  const fetchMLPrediction = () => {
+    const game = selectedGame();
+    if (!game) return;
+    
+    fetch(`${props.backendUrl}/api/ml/prediction/${game.game_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setMlPred(data);
+          setLastUpdate(new Date().toLocaleTimeString());
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  };
+
+  // Start polling when game selected
   createEffect(() => {
     const game = selectedGame();
+    
+    // Clear old interval
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = undefined;
+    }
+    
     if (game) {
       setLoading(true);
-      fetch(`${props.backendUrl}/api/ml/prediction/${game.game_id}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          setMlPred(data);
-          setLoading(false);
-          setTimeout(() => spreadInput?.focus(), 100);
-        })
-        .catch(() => {
-          setMlPred(null);
-          setLoading(false);
-        });
+      
+      // Immediate fetch
+      fetchMLPrediction();
+      setTimeout(() => spreadInput?.focus(), 100);
+      
+      // Poll every 5 seconds for live ML updates
+      pollInterval = window.setInterval(fetchMLPrediction, 5000);
+    }
+  });
+  
+  // Cleanup on unmount
+  onCleanup(() => {
+    if (pollInterval) {
+      clearInterval(pollInterval);
     }
   });
 
@@ -183,15 +214,55 @@ const TradingDesk: Component<{
           </Show>
 
           <Show when={mlPred()}>
+            {/* ML PREDICTION DISPLAY */}
+            <div class="bg-gradient-to-br from-indigo-950 to-blue-950 border-2 border-indigo-500 rounded-2xl p-6 mb-6">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-white text-xl font-bold">🤖 MAMBA ML PREDICTION</h2>
+                <div class="text-xs text-indigo-400">Updated: {lastUpdate()}</div>
+              </div>
+              
+              <div class="grid grid-cols-4 gap-4">
+                <div class="bg-black/30 rounded-xl p-4 text-center">
+                  <div class="text-xs text-gray-400 uppercase mb-1">ML Spread</div>
+                  <div class="text-2xl font-black text-white">
+                    {mlPred()?.predicted_spread > 0 ? '+' : ''}{mlPred()?.predicted_spread.toFixed(1)}
+                  </div>
+                </div>
+                
+                <div class="bg-black/30 rounded-xl p-4 text-center">
+                  <div class="text-xs text-gray-400 uppercase mb-1">90% CI</div>
+                  <div class="text-sm font-bold text-blue-400">
+                    {mlPred()?.confidence_interval_90[0].toFixed(1)} to {mlPred()?.confidence_interval_90[1].toFixed(1)}
+                  </div>
+                </div>
+                
+                <div class="bg-black/30 rounded-xl p-4 text-center">
+                  <div class="text-xs text-gray-400 uppercase mb-1">Win Prob</div>
+                  <div class="text-2xl font-black text-green-400">
+                    {(mlPred()!.win_probability * 100).toFixed(1)}%
+                  </div>
+                </div>
+                
+                <div class="bg-black/30 rounded-xl p-4 text-center">
+                  <div class="text-xs text-gray-400 uppercase mb-1">Confidence</div>
+                  <div class="text-2xl font-black text-yellow-400">
+                    {(mlPred()!.model_confidence * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div class="grid lg:grid-cols-2 gap-6">
               
               {/* LEFT: Odds Entry */}
               <div class="bg-gradient-to-br from-blue-950 to-purple-950 border-2 border-blue-500/30 rounded-2xl p-8">
-                <h2 class="text-white text-xl font-bold mb-6">📊 Market Odds</h2>
+                <h2 class="text-white text-xl font-bold mb-6">📊 Enter Market Odds</h2>
                 
                 <div class="space-y-4">
                   <div>
-                    <label class="block text-blue-400 text-xs font-bold mb-2">SPREAD ({selectedGame()!.home_team})</label>
+                    <label class="block text-blue-400 text-xs font-bold mb-2">
+                      SPREAD ({selectedGame()!.home_team}) • BetOnline Line
+                    </label>
                     <input
                       ref={spreadInput}
                       type="number"
@@ -201,11 +272,14 @@ const TradingDesk: Component<{
                       onInput={(e) => setSpread(e.target.value)}
                       class="w-full bg-black/50 text-white text-3xl font-bold text-center px-6 py-5 rounded-xl border-2 border-blue-500 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/20 focus:outline-none"
                     />
+                    <div class="text-xs text-gray-500 mt-2 text-center">
+                      Enter the spread from BetOnline (e.g., -3.5 means home favored by 3.5)
+                    </div>
                   </div>
 
                   <div class="grid grid-cols-2 gap-3">
                     <div>
-                      <label class="block text-purple-400 text-xs font-bold mb-2">TOTAL</label>
+                      <label class="block text-purple-400 text-xs font-bold mb-2">TOTAL • Optional</label>
                       <input
                         type="number"
                         step="0.5"
@@ -216,10 +290,10 @@ const TradingDesk: Component<{
                       />
                     </div>
                     <div>
-                      <label class="block text-green-400 text-xs font-bold mb-2">HOME ML</label>
+                      <label class="block text-green-400 text-xs font-bold mb-2">AMERICAN ODDS • Optional</label>
                       <input
                         type="number"
-                        placeholder="-160"
+                        placeholder="-110"
                         value={homeML()}
                         onInput={(e) => setHomeML(e.target.value)}
                         class="w-full bg-black/50 text-white text-xl font-bold text-center px-3 py-3 rounded-xl border-2 border-green-500 focus:outline-none"
