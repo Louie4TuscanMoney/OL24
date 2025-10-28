@@ -12,7 +12,20 @@ CREATE TABLE IF NOT EXISTS teams (
     abbreviation VARCHAR(3) UNIQUE NOT NULL,
     full_name VARCHAR(50) NOT NULL,
     conference VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
+    division VARCHAR(20),
+    
+    -- Visual Assets (for frontend)
+    logo_url VARCHAR(200),  -- Team logo
+    primary_color VARCHAR(7),  -- Hex color
+    secondary_color VARCHAR(7),
+    
+    -- Location
+    city VARCHAR(50),
+    state VARCHAR(30),
+    arena VARCHAR(100),
+    
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS seasons (
@@ -24,8 +37,42 @@ CREATE TABLE IF NOT EXISTS seasons (
 CREATE TABLE IF NOT EXISTS players (
     player_id VARCHAR(10) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
     team_id VARCHAR(10) REFERENCES teams(team_id),
+    
+    -- Visual Assets (for frontend)
+    headshot_url VARCHAR(200),  -- Player image
+    action_photo_url VARCHAR(200),  -- Action shot
+    
+    -- Bio
+    jersey_number VARCHAR(3),
+    position VARCHAR(5),
+    height_feet INTEGER,
+    height_inches INTEGER,
+    height_display VARCHAR(10),  -- "6-9"
+    weight_lbs INTEGER,
+    birthdate DATE,
+    age INTEGER,
+    country VARCHAR(50),
+    
+    -- Career
+    draft_year INTEGER,
+    draft_round INTEGER,
+    draft_number INTEGER,
+    draft_team VARCHAR(50),
+    college VARCHAR(100),
+    experience_years INTEGER,
+    
+    -- Status
     is_active BOOLEAN DEFAULT TRUE,
+    is_rookie BOOLEAN DEFAULT FALSE,
+    
+    -- Social/Marketing
+    twitter_handle VARCHAR(50),
+    instagram_handle VARCHAR(50),
+    
+    created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
 

@@ -1164,6 +1164,32 @@ def get_db_connection():
     return None
 
 
+def _calculate_variance(games, stat_key):
+    """Calculate variance for probability analysis"""
+    if not games or len(games) < 2:
+        return 0
+    values = [g[stat_key] for g in games if g[stat_key] is not None]
+    if len(values) < 2:
+        return 0
+    mean = sum(values) / len(values)
+    variance = sum((x - mean) ** 2 for x in values) / len(values)
+    return round(variance, 2)
+
+
+def _calculate_consistency(games):
+    """Consistency score: 1.0 = perfect, 0.0 = chaos"""
+    if not games or len(games) < 3:
+        return 0
+    pts_values = [g['pts'] for g in games if g['pts'] is not None]
+    if len(pts_values) < 3:
+        return 0
+    mean = sum(pts_values) / len(pts_values)
+    std = (sum((x - mean) ** 2 for x in pts_values) / len(pts_values)) ** 0.5
+    cv = std / mean if mean > 0 else 0  # Coefficient of variation
+    consistency = max(0, 1.0 - cv)  # Lower CV = higher consistency
+    return round(consistency, 3)
+
+
 # ============================================================================
 # NBA STATS API ENDPOINTS (Rolling Model)
 # ============================================================================
@@ -1235,6 +1261,161 @@ async def get_standings():
         
         conn.close()
         return {"standings": standings_data}
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.get("/api/stats/player/{player_id}")
+async def get_player_profile(player_id: str):
+    """
+    COMPREHENSIVE PLAYER PROFILE
+    Everything for professional frontend display
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get player info + season stats + team
+        cursor.execute("""
+            SELECT 
+                p.player_id, p.name, p.first_name, p.last_name,
+                p.headshot_url, p.action_photo_url,
+                p.jersey_number, p.position, p.height_display, p.weight_lbs,
+                p.birthdate, p.age, p.country, p.experience_years,
+                p.draft_year, p.draft_round, p.draft_number, p.college,
+                t.abbreviation, t.full_name AS team_name, t.logo_url, 
+                t.primary_color, t.secondary_color,
+                pss.gp, pss.ppg, pss.rpg, pss.apg,
+                pss.fg_pct, pss.fg3_pct, pss.ft_pct,
+                pss.ts_pct, pss.efg_pct,
+                pss.pts_100, pss.reb_100, pss.ast_100,
+                pss.pts_36, pss.reb_36, pss.ast_36,
+                pss.lebron_total, pss.lebron_offense, pss.lebron_defense,
+                pss.rapm_total
+            FROM players p
+            LEFT JOIN teams t ON p.team_id = t.team_id
+            LEFT JOIN player_season_stats pss ON p.player_id = pss.player_id
+            WHERE p.player_id = %s
+        """, (player_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return {"error": "Player not found"}
+        
+        # Get last 10 games
+        cursor.execute("""
+            SELECT game_date, opponent_id, pts, reb, ast, 
+                   fgm, fga, fg3m, minutes, plus_minus,
+                   pts_100, ts_pct
+            FROM player_last10
+            WHERE player_id = %s AND game_rank <= 10
+            ORDER BY game_date DESC
+        """, (player_id,))
+        
+        last10 = []
+        for game_row in cursor.fetchall():
+            opp_id = game_row[1]
+            cursor.execute("SELECT abbreviation FROM teams WHERE team_id = %s", (opp_id,))
+            opp_result = cursor.fetchone()
+            opp_abbr = opp_result[0] if opp_result else 'UNK'
+            
+            last10.append({
+                "date": game_row[0].strftime('%Y-%m-%d'),
+                "opponent": opp_abbr,
+                "pts": game_row[2],
+                "reb": game_row[3],
+                "ast": game_row[4],
+                "fgm": game_row[5],
+                "fga": game_row[6],
+                "fg3m": game_row[7],
+                "minutes": float(game_row[8]) if game_row[8] else 0,
+                "plus_minus": game_row[9],
+                "pts_100": float(game_row[10]) if game_row[10] else 0,
+                "ts_pct": float(game_row[11]) if game_row[11] else 0
+            })
+        
+        conn.close()
+        
+        # Build comprehensive profile
+        return {
+            "player_id": row[0],
+            "name": row[1],
+            "first_name": row[2],
+            "last_name": row[3],
+            
+            # Visuals
+            "headshot_url": row[4],
+            "action_photo_url": row[5],
+            
+            # Bio
+            "jersey": row[6],
+            "position": row[7],
+            "height": row[8],
+            "weight": row[9],
+            "birthdate": row[10].strftime('%Y-%m-%d') if row[10] else None,
+            "age": row[11],
+            "country": row[12],
+            "experience": row[13],
+            
+            # Draft
+            "draft_year": row[14],
+            "draft_round": row[15],
+            "draft_number": row[16],
+            "college": row[17],
+            
+            # Team
+            "team": {
+                "abbreviation": row[18],
+                "full_name": row[19],
+                "logo_url": row[20],
+                "primary_color": row[21],
+                "secondary_color": row[22]
+            },
+            
+            # Season Stats (Per-Game)
+            "season_stats": {
+                "games_played": row[23],
+                "ppg": float(row[24]) if row[24] else 0,
+                "rpg": float(row[25]) if row[25] else 0,
+                "apg": float(row[26]) if row[26] else 0,
+                "fg_pct": float(row[27]) if row[27] else 0,
+                "fg3_pct": float(row[28]) if row[28] else 0,
+                "ft_pct": float(row[29]) if row[29] else 0
+            },
+            
+            # Advanced Stats (Self-Computed!)
+            "advanced_stats": {
+                "ts_pct": float(row[30]) if row[30] else 0,
+                "efg_pct": float(row[31]) if row[31] else 0,
+                "pts_100": float(row[32]) if row[32] else 0,
+                "reb_100": float(row[33]) if row[33] else 0,
+                "ast_100": float(row[34]) if row[34] else 0,
+                "pts_36": float(row[35]) if row[35] else 0,
+                "reb_36": float(row[36]) if row[36] else 0,
+                "ast_36": float(row[37]) if row[37] else 0,
+                "lebron": float(row[38]) if row[38] else 0,
+                "lebron_offense": float(row[39]) if row[39] else 0,
+                "lebron_defense": float(row[40]) if row[40] else 0,
+                "rapm": float(row[41]) if row[41] else 0
+            },
+            
+            # Last 10 Games
+            "last10_games": last10,
+            
+            # Probability Context (for your independent probability math)
+            "probability_metrics": {
+                "sample_size": row[23],
+                "scoring_variance": _calculate_variance(last10, 'pts') if last10 else 0,
+                "consistency_score": _calculate_consistency(last10) if last10 else 0
+            }
+        }
+        
     except Exception as e:
         if conn:
             conn.close()
