@@ -94,6 +94,13 @@ court_stream = None
 auth_manager = None
 active_connections: List[WebSocket] = []
 
+# Simple cache for predictions (avoid recomputing every request)
+_prediction_cache = {
+    'data': None,
+    'timestamp': None,
+    'ttl_seconds': 10  # Cache for 10 seconds
+}
+
 
 @app.on_event("startup")
 async def startup():
@@ -343,6 +350,16 @@ async def get_opportunities():
     if trading_engine is None:
         return JSONResponse({"error": "System not initialized"}, status_code=503)
     
+    # Check cache first
+    now = datetime.now()
+    if (_prediction_cache['data'] is not None and 
+        _prediction_cache['timestamp'] is not None):
+        age_seconds = (now - _prediction_cache['timestamp']).total_seconds()
+        if age_seconds < _prediction_cache['ttl_seconds']:
+            # Return cached data
+            return _prediction_cache['data']
+    
+    # Cache miss or expired - compute fresh predictions
     opportunities = trading_engine.scan_live_opportunities()
     
     # Enhance each opportunity with category, zone, and betting decision
@@ -447,7 +464,8 @@ async def get_opportunities():
     betting_opps = [o for o in enhanced_opps if o['should_bet']]
     context_opps = [o for o in enhanced_opps if not o['should_bet']]
     
-    return {
+    # Build response
+    response = {
         "all_opportunities": enhanced_opps,
         "betting_opportunities": betting_opps,
         "context_opportunities": context_opps,
@@ -456,6 +474,12 @@ async def get_opportunities():
         "context_count": len(context_opps),
         "timestamp": datetime.now().isoformat()
     }
+    
+    # Cache the response
+    _prediction_cache['data'] = response
+    _prediction_cache['timestamp'] = now
+    
+    return response
 
 
 @app.get("/api/mamba-performance")
