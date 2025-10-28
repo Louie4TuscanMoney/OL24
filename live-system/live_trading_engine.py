@@ -527,8 +527,62 @@ class LiveTradingEngine:
             home_implied_prob = line.get('home_implied_prob', 0.5)
             away_implied_prob = line.get('away_implied_prob', 0.5)
             
+            # ENHANCED: Include ALL 33 Mamba features for frontend display
+            mamba_features = None
+            if features is not None and len(features) == 33:
+                mamba_features = {
+                    'pattern_analysis': {
+                        'mean_diff': float(features[0]),
+                        'std_diff': float(features[1]),
+                        'trend': float(features[2]),
+                        'volatility': float(features[3]),
+                        'velocity': float(features[4]),
+                        'acceleration': float(features[5]),
+                        'recent_momentum': float(features[6]),
+                        'lead_changes': int(features[7]),
+                        'max_swing': float(features[8]),
+                        'comeback_potential': float(features[9])
+                    },
+                    'spectral': {
+                        'spectral_energy': float(features[10]),
+                        'spectral_entropy': float(features[11]),
+                        'low_freq_power': float(features[12]),
+                        'mid_freq_power': float(features[13]),
+                        'high_freq_power': float(features[14]),
+                        'dominant_freq': float(features[15])
+                    },
+                    'autocorrelation': {
+                        'lag1': float(features[16]),
+                        'lag2': float(features[17]),
+                        'lag3': float(features[18])
+                    },
+                    'advanced_stats': {
+                        'pace_proxy': float(features[19]),
+                        'efg_proxy': float(features[20]),
+                        'ts_proxy': float(features[21]),
+                        'netrtg_proxy': float(features[22]),
+                        'usg_proxy': float(features[23]),
+                        'pm_proxy': float(features[24]),
+                        'pie_proxy': float(features[25]),
+                        'four_factors': float(features[26])
+                    },
+                    'team_form': {
+                        'team_diff_lag1': float(features[27]),
+                        'team_mean_lag1': float(features[28]),
+                        'team_diff_rolling3': float(features[29]),
+                        'team_volatility_rolling3': float(features[30]),
+                        'team_form_10games': float(features[31]),
+                        'team_consistency': float(features[32])
+                    },
+                    'extraction_time_ms': 0,  # TODO: track this
+                    'pbp_events_count': 0,  # TODO: track this
+                    'pattern_length': 18
+                }
+            
             return {
                 'game_id': game['game_id'],
+                'home_team': game['home_team'],
+                'away_team': game['away_team'],
                 'matchup': f"{game['away_team']} @ {game['home_team']}",
                 'current_score': f"{game['away_score']}-{game['home_score']}",
                 'period': f"Q{game['period']} {game['clock']}",
@@ -550,6 +604,9 @@ class LiveTradingEngine:
                 'implied_prob_home': home_implied_prob,
                 'implied_prob_away': away_implied_prob,
                 'vig_percentage': line.get('vig_percentage', 0),
+                # NEW: ALL 33 MAMBA FEATURES
+                'mamba_features': mamba_features,
+                'features_extracted': mamba_features is not None,
                 'timestamp': datetime.now().isoformat()
             }
     

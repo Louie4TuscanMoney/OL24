@@ -1,22 +1,27 @@
 /**
  * Expanded Game Card - Shows ALL data layers
  * NBA scores + 18-min pattern + ML prediction + BetOnline odds + Risk layers
+ * ENHANCED: Click to view ALL 33 Mamba features
  */
 
-import { Component, Show } from 'solid-js';
-import type { NBAGame, Prediction, Edge, BettingRecommendation, ScorePattern } from '../types';
+import { Component, Show, createSignal } from 'solid-js';
+import type { NBAGame, EnhancedPrediction, Edge, BettingRecommendation, ScorePattern } from '../types';
 import PredictionChart from './PredictionChart';
 import RiskLayers from './RiskLayers';
+import FeatureDetailsModal from './FeatureDetailsModal';
 
 interface Props {
   game: NBAGame;
   pattern?: ScorePattern[];
-  prediction?: Prediction;
+  prediction?: EnhancedPrediction;
   edge?: Edge;
   recommendation?: BettingRecommendation;
 }
 
 const GameCardExpanded: Component<Props> = (props) => {
+  // Modal state for feature details
+  const [isModalOpen, setIsModalOpen] = createSignal(false);
+  
   const diff = () => props.game.score_home - props.game.score_away;
   
   const diffColor = () => {
@@ -112,6 +117,24 @@ const GameCardExpanded: Component<Props> = (props) => {
                 </span>
               </div>
             </div>
+
+            {/* VIEW ALL FEATURES BUTTON */}
+            <Show when={props.prediction!.features}>
+              <div class="mt-3 pt-3 border-t border-blue-500/30">
+                <button 
+                  onClick={() => setIsModalOpen(true)}
+                  class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 font-semibold"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                  </svg>
+                  View ALL 33 Mamba Features + Math
+                </button>
+                <div class="text-xs text-center text-gray-500 mt-2">
+                  Click to see pattern analysis, spectral features, autocorrelation, advanced stats & team form
+                </div>
+              </div>
+            </Show>
           </div>
         </Show>
 
@@ -143,6 +166,21 @@ const GameCardExpanded: Component<Props> = (props) => {
           <RiskLayers recommendation={props.recommendation!} />
         </Show>
       </div>
+
+      {/* Feature Details Modal */}
+      <Show when={props.prediction && props.pattern}>
+        <FeatureDetailsModal 
+          isOpen={isModalOpen()}
+          onClose={() => setIsModalOpen(false)}
+          prediction={props.prediction!}
+          pattern={props.pattern!}
+          gameInfo={{
+            home_team: props.game.home_team,
+            away_team: props.game.away_team,
+            game_id: props.game.game_id
+          }}
+        />
+      </Show>
     </div>
   );
 };
