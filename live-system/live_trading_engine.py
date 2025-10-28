@@ -175,13 +175,37 @@ class LiveTradingEngine:
                 model_data = pickle.load(f)
             
             if isinstance(model_data, dict):
-                print("✅ Model loaded")
+                print("✅ Model loaded successfully!")
+                print(f"   Model keys: {list(model_data.keys())}")
+                
+                # Validate expected structure
+                if 'model' in model_data:
+                    print("   ✅ 'model' key found")
+                else:
+                    print("   ⚠️ 'model' key NOT found - checking for alternative structure")
+                    # Maybe it's the model itself, wrap it
+                    if hasattr(model_data, 'predict'):
+                        print("   ✅ Model has .predict() method, wrapping...")
+                        return {'model': model_data}
+                
+                if 'scaler' in model_data:
+                    print("   ✅ 'scaler' key found")
+                else:
+                    print("   ⚠️ 'scaler' key NOT found - will use raw features")
+                
                 return model_data
             else:
-                print("⚠️ Model format unexpected")
+                print("⚠️ Model format unexpected (not a dict)")
+                print(f"   Type: {type(model_data)}")
+                # If it's directly the model object, wrap it
+                if hasattr(model_data, 'predict'):
+                    print("   ✅ Has .predict() method, wrapping in dict...")
+                    return {'model': model_data}
                 return None
         except Exception as e:
             print(f"❌ Error loading model: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def extract_features_from_live_game(self, game: Dict) -> Optional[np.ndarray]:
@@ -437,14 +461,30 @@ class LiveTradingEngine:
             return None
         
         try:
+            # Check model structure
+            if not isinstance(self.model, dict):
+                print(f"❌ Model is not a dict! Type: {type(self.model)}")
+                return None
+            
+            if 'model' not in self.model:
+                print(f"❌ 'model' key not found in model dict!")
+                print(f"   Available keys: {list(self.model.keys())}")
+                return None
+            
+            # Scale features if scaler exists
             if self.model.get('scaler'):
                 X = self.model['scaler'].transform(features.reshape(1, -1))
             else:
                 X = features.reshape(1, -1)
             
+            # Make prediction
             prediction = self.model['model'].predict(X)[0]
+            print(f"✅ MAMBA PREDICTION: {prediction:.2f}")
+            
         except Exception as e:
             print(f"❌ Prediction error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
             
         # ENHANCED: Store Mamba prediction for performance tracking (only if real model)
