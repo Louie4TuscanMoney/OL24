@@ -1064,9 +1064,9 @@ async def websocket_endpoint(websocket: WebSocket):
             # Send to frontend
             await websocket.send_json(message)
             
-            # Update every 2 seconds for REAL-TIME clock + scores
-            # NBA API gives us fresh data, frontend gets smooth updates
-            await asyncio.sleep(2)
+            # ⚡ ULTRA REAL-TIME: 1-second updates!
+            # Eliminates all perceived lag, scores update instantly
+            await asyncio.sleep(1)
             
     except WebSocketDisconnect:
         active_connections.remove(websocket)

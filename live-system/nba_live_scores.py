@@ -83,9 +83,29 @@ class NBALiveScores:
                     return games
                     
             except Exception as e:
-                print(f"⚠️ nba_api failed: {e}, trying CDN...")
+                print(f"⚠️ nba_api failed: {e}, trying ESPN...")
         
-        # METHOD 3: Fallback to CDN (cached but reliable)
+        # METHOD 2: ESPN API (FAST - 10 second updates!)
+        try:
+            response = requests.get(self.scoreboard_url, headers=self.headers, timeout=3)
+            response.raise_for_status()
+            data = response.json()
+            
+            games = []
+            if 'events' in data:
+                for event in data['events']:
+                    parsed = self._parse_espn_game(event)
+                    if parsed:
+                        games.append(parsed)
+            
+            if games:
+                print(f"✅ ESPN API: {len(games)} games (FAST!)")
+                return games
+                
+        except Exception as e:
+            print(f"⚠️ ESPN failed: {e}, trying CDN...")
+        
+        # METHOD 3: Fallback to CDN (5-10 min delay - LAST RESORT!)
         try:
             response = requests.get(self.scoreboard_url_cdn, headers=self.headers, timeout=3)
             response.raise_for_status()
