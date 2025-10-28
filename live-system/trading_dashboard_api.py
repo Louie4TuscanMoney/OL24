@@ -210,6 +210,41 @@ async def root():
     }
 
 
+@app.get("/api/debug/system-status")
+async def debug_system_status():
+    """
+    Debug endpoint to check if ML system is working
+    """
+    status = {
+        "trading_engine_initialized": trading_engine is not None,
+        "ml_model_loaded": False,
+        "mamba_extractor_loaded": False,
+        "nba_api_initialized": nba_api is not None,
+        "recent_games_count": 0,
+        "recent_predictions_count": 0
+    }
+    
+    if trading_engine:
+        status["ml_model_loaded"] = trading_engine.model is not None
+        status["mamba_extractor_loaded"] = hasattr(trading_engine, 'mamba_extractor') and trading_engine.mamba_extractor is not None
+        
+        # Try to scan for predictions
+        try:
+            predictions = trading_engine.scan_live_opportunities()
+            status["recent_predictions_count"] = len(predictions)
+        except Exception as e:
+            status["scan_error"] = str(e)
+    
+    if nba_api:
+        try:
+            games = nba_api.get_todays_games()
+            status["recent_games_count"] = len(games)
+        except Exception as e:
+            status["games_error"] = str(e)
+    
+    return status
+
+
 # Auth Endpoints
 class SignupRequest(BaseModel):
     phone: str
