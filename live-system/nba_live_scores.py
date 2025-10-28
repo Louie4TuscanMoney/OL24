@@ -50,7 +50,7 @@ class NBALiveScores:
         self._last_nba_api_call = 0
         self._last_espn_api_call = 0
         self._nba_api_cooldown = 1.0  # Wait 1 second between nba_api calls
-        self._espn_api_cooldown = 0.2  # ⚡ ULTRA-FAST: 0.2s = 5 calls/second max
+        self._espn_api_cooldown = 1.0  # ⚡ 1-SECOND UPDATES (ESPN limit)
         
         # Consecutive failures tracking
         self._nba_api_failures = 0
@@ -58,8 +58,14 @@ class NBALiveScores:
         self._failure_timeout = 30
         self._nba_api_timeout_until = 0
         
-        print(f"✅ NBA API initialized: REAL-TIME with rate limiting (1s cooldown)")
-        print(f"   Priority: nba_api (instant) → ESPN (1s!) → CDN (5-10 min)")
+        # CACHE LAST VALID DATA (prevents stale CDN fallback)
+        self._last_valid_games = []
+        self._last_valid_timestamp = 0
+        self._cache_max_age = 30  # Cache is valid for 30 seconds (be patient!)
+        
+        print(f"✅ NBA API initialized: 1-SECOND ESPN REFRESH with 30s smart cache")
+        print(f"   Strategy: ESPN every 1s → Use cache if rate limited → Never panic")
+        print(f"   Cache keeps live data stable even during brief API hiccups")
         
     def get_todays_games(self) -> List[Dict]:
         """
@@ -78,9 +84,13 @@ class NBALiveScores:
             if now < self._nba_api_timeout_until:
                 remaining = int(self._nba_api_timeout_until - now)
                 print(f"⚠️ nba_api in timeout ({remaining}s remaining), using fallback")
-            # Check rate limiting cooldown
+            # Check rate limiting cooldown - USE CACHE if available
             elif (now - self._last_nba_api_call) < self._nba_api_cooldown:
-                print(f"⚡ Rate limit: Using cached/fallback (nba_api called {now - self._last_nba_api_call:.1f}s ago)")
+                age = now - self._last_valid_timestamp
+                if self._last_valid_games and age < self._cache_max_age:
+                    print(f"⚡ Rate limited → Using cache ({age:.1f}s old, still fresh)")
+                    return self._last_valid_games
+                print(f"⚠️ Rate limit + stale cache → trying ESPN...")
             else:
                 try:
                     self._last_nba_api_call = now
@@ -97,6 +107,8 @@ class NBALiveScores:
                     if games:
                         print(f"✅ nba_api library: {len(games)} games (CORRECT GAME IDs!)")
                         self._nba_api_failures = 0  # Reset failure counter on success
+                        self._last_valid_games = games  # CACHE for rate limiting
+                        self._last_valid_timestamp = now
                         return games
                         
                 except Exception as e:
@@ -118,7 +130,7 @@ class NBALiveScores:
                     print(f"   Trying ESPN...")
         
         # METHOD 2: ESPN API (ULTRA FAST - 1 SECOND UPDATES!)
-        # Apply rate limiting
+        # Check rate limiting first
         if (now - self._last_espn_api_call) >= self._espn_api_cooldown:
             try:
                 self._last_espn_api_call = now
@@ -134,15 +146,28 @@ class NBALiveScores:
                             games.append(parsed)
                 
                 if games:
-                    print(f"✅ ESPN API: {len(games)} games (FAST!)")
+                    print(f"✅ ESPN API: {len(games)} games (1-SECOND UPDATE!)")
+                    self._last_valid_games = games  # CACHE for rate limiting
+                    self._last_valid_timestamp = now
                     return games
                     
             except Exception as e:
                 print(f"⚠️ ESPN failed: {e}, trying CDN...")
         else:
-            print(f"⚡ ESPN rate limit: Skipping (called {now - self._last_espn_api_call:.1f}s ago)")
+            # ESPN rate limited - USE CACHE (be patient, don't panic!)
+            age = now - self._last_valid_timestamp
+            if self._last_valid_games and age < self._cache_max_age:
+                print(f"⚡ ESPN rate limited → Using cache ({age:.1f}s old, still fresh)")
+                return self._last_valid_games
+            print(f"⚠️ ESPN rate limited + stale cache → trying CDN...")
         
-        # METHOD 3: Fallback to CDN (5-10 min delay - LAST RESORT!)
+        # METHOD 3: Fallback to CDN (5-10 min delay - ALMOST NEVER USE THIS!)
+        # Prefer cache over stale CDN unless cache is REALLY old
+        age = now - self._last_valid_timestamp
+        if self._last_valid_games and age < 60:  # Cache better than 5-10min delayed CDN!
+            print(f"⚡ Cache ({age:.1f}s old) BETTER than stale CDN → using cache")
+            return self._last_valid_games
+            
         try:
             response = requests.get(self.scoreboard_url_cdn, headers=self.headers, timeout=3)
             response.raise_for_status()
@@ -154,12 +179,23 @@ class NBALiveScores:
                 for game in data['scoreboard']['games']:
                     games.append(self._parse_game(game))
             
-            print(f"⚠️ Using CDN (5-10 min delay): {len(games)} games")
-            return games
+            if games:
+                print(f"⚠️ Using CDN (5-10 min delay): {len(games)} games")
+                self._last_valid_games = games  # Even CDN data is cached
+                self._last_valid_timestamp = now
+                return games
             
         except Exception as e:
-            print(f"❌ All APIs failed: {e}")
-            return []
+            print(f"❌ CDN failed: {e}")
+        
+        # ABSOLUTE LAST RESORT: Return cache even if very old
+        if self._last_valid_games:
+            age = now - self._last_valid_timestamp
+            print(f"🚨 ALL APIS DOWN! Using cache ({age:.1f}s old) - better than nothing!")
+            return self._last_valid_games
+            
+        print(f"❌ No data available (no cache, all APIs failed)")
+        return []
     
     def _parse_espn_game(self, event_data: Dict) -> Dict:
         """
