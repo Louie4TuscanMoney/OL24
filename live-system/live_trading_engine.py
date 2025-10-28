@@ -407,19 +407,17 @@ class LiveTradingEngine:
         Returns:
             Prediction dict with OntoRisk analysis
         """
-        if self.model is None:
-            return None
-        
-        # ENHANCED: Extract real Mamba features (33 features)
-        features = self.extract_features_from_live_game(game)
-        
-        if features is None:
-            print("❌ Feature extraction failed, skipping prediction")
-            return None
+        # ENHANCED: Extract real Mamba features (33 features) if model available
+        features = None
+        if self.model is not None:
+            features = self.extract_features_from_live_game(game)
+            
+            if features is None:
+                print("⚠️ Feature extraction failed, will use synthetic prediction")
         
         # Check if model is loaded
-        if self.model is None:
-            print("⚠️ No model loaded, using synthetic prediction")
+        if self.model is None or features is None:
+            print("⚠️ No model loaded or features failed, using synthetic prediction")
             # Generate synthetic prediction based on current differential
             prediction = game['current_diff'] + np.random.normal(0, 3)
         else:
