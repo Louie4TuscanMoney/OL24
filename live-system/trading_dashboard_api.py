@@ -221,24 +221,49 @@ async def debug_system_status():
         "mamba_extractor_loaded": False,
         "nba_api_initialized": nba_api is not None,
         "recent_games_count": 0,
-        "recent_predictions_count": 0
+        "recent_predictions_count": 0,
+        "startup_complete": True
     }
     
     if trading_engine:
         status["ml_model_loaded"] = trading_engine.model is not None
         status["mamba_extractor_loaded"] = hasattr(trading_engine, 'mamba_extractor') and trading_engine.mamba_extractor is not None
+        status["ontorisk_enabled"] = trading_engine.ontorisk_enabled
         
         # Try to scan for predictions
         try:
+            print("🔍 DEBUG: Attempting to scan live opportunities...")
             predictions = trading_engine.scan_live_opportunities()
             status["recent_predictions_count"] = len(predictions)
+            print(f"📊 DEBUG: Got {len(predictions)} predictions")
+            
+            # Show first prediction details
+            if predictions:
+                status["sample_prediction"] = {
+                    "matchup": predictions[0].get("matchup", "Unknown"),
+                    "prediction": predictions[0].get("prediction", "N/A"),
+                    "has_features": predictions[0].get("features_extracted", False)
+                }
         except Exception as e:
             status["scan_error"] = str(e)
+            print(f"❌ DEBUG: Scan error: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        status["startup_complete"] = False
+        status["error"] = "Trading engine not initialized!"
     
     if nba_api:
         try:
             games = nba_api.get_todays_games()
             status["recent_games_count"] = len(games)
+            # Show first game details
+            if games:
+                status["sample_game"] = {
+                    "matchup": f"{games[0].get('away_team')} @ {games[0].get('home_team')}",
+                    "period": games[0].get("period"),
+                    "can_predict": games[0].get("can_predict", False)
+                }
         except Exception as e:
             status["games_error"] = str(e)
     
