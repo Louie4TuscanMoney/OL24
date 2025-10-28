@@ -25,9 +25,10 @@ interface ScheduledGame {
 
 const SchedulePage: Component = () => {
   const [games, setGames] = createSignal<ScheduledGame[]>([]);
-  const [daysAhead, setDaysAhead] = createSignal(7);
+  const [daysAhead, setDaysAhead] = createSignal(30);
   const [loading, setLoading] = createSignal(true);
   const [selectedTeam, setSelectedTeam] = createSignal<string>('');
+  const [viewMode, setViewMode] = createSignal<'upcoming' | 'today' | 'week' | 'month'>('upcoming');
 
   const API_BASE = 'https://ol24-production.up.railway.app';
 
@@ -86,43 +87,102 @@ const SchedulePage: Component = () => {
           </p>
         </div>
 
-        {/* Filters */}
-        <div class="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700 flex gap-4 items-center justify-center">
-          <div>
-            <label class="text-gray-400 text-sm mr-2">Days Ahead:</label>
-            <select 
-              value={daysAhead()}
-              onChange={(e) => {
-                setDaysAhead(parseInt(e.target.value));
-                fetchSchedule();
-              }}
-              class="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600"
+        {/* Professional Filter Bar */}
+        <div class="bg-gray-800 rounded-lg p-6 mb-6 border border-gray-700">
+          {/* View Mode Buttons */}
+          <div class="flex gap-2 mb-4 justify-center flex-wrap">
+            <button
+              onClick={() => { setViewMode('today'); setDaysAhead(1); fetchSchedule(); }}
+              class={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                viewMode() === 'today' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
             >
-              <option value="1">Today</option>
-              <option value="3">Next 3 Days</option>
-              <option value="7">Next Week</option>
-              <option value="14">Next 2 Weeks</option>
-              <option value="30">Next Month</option>
-            </select>
+              📅 Today
+            </button>
+            <button
+              onClick={() => { setViewMode('week'); setDaysAhead(7); fetchSchedule(); }}
+              class={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                viewMode() === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              📅 This Week
+            </button>
+            <button
+              onClick={() => { setViewMode('month'); setDaysAhead(30); fetchSchedule(); }}
+              class={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                viewMode() === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              📅 This Month
+            </button>
+            <button
+              onClick={() => { setViewMode('upcoming'); setDaysAhead(180); fetchSchedule(); }}
+              class={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                viewMode() === 'upcoming' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              📅 Full Season
+            </button>
           </div>
-          
-          <div>
-            <label class="text-gray-400 text-sm mr-2">Team Filter:</label>
+
+          {/* Team Filter */}
+          <div class="flex items-center justify-center gap-3">
+            <label class="text-gray-400 font-semibold">Filter by Team:</label>
             <select 
               value={selectedTeam()}
               onChange={(e) => {
                 setSelectedTeam(e.target.value);
                 fetchSchedule();
               }}
-              class="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600"
+              class="bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 font-semibold min-w-[200px]"
             >
-              <option value="">All Teams</option>
-              <option value="LAL">Lakers</option>
-              <option value="GSW">Warriors</option>
+              <option value="">🏀 All Teams</option>
+              <option value="ATL">Hawks</option>
               <option value="BOS">Celtics</option>
+              <option value="BKN">Nets</option>
+              <option value="CHA">Hornets</option>
+              <option value="CHI">Bulls</option>
+              <option value="CLE">Cavaliers</option>
+              <option value="DAL">Mavericks</option>
+              <option value="DEN">Nuggets</option>
+              <option value="DET">Pistons</option>
+              <option value="GSW">Warriors</option>
+              <option value="HOU">Rockets</option>
+              <option value="IND">Pacers</option>
+              <option value="LAC">Clippers</option>
+              <option value="LAL">Lakers</option>
+              <option value="MEM">Grizzlies</option>
               <option value="MIA">Heat</option>
-              {/* Add all 30 teams */}
+              <option value="MIL">Bucks</option>
+              <option value="MIN">Timberwolves</option>
+              <option value="NOP">Pelicans</option>
+              <option value="NYK">Knicks</option>
+              <option value="OKC">Thunder</option>
+              <option value="ORL">Magic</option>
+              <option value="PHI">76ers</option>
+              <option value="PHX">Suns</option>
+              <option value="POR">Trail Blazers</option>
+              <option value="SAC">Kings</option>
+              <option value="SAS">Spurs</option>
+              <option value="TOR">Raptors</option>
+              <option value="UTA">Jazz</option>
+              <option value="WAS">Wizards</option>
             </select>
+            
+            <Show when={selectedTeam()}>
+              <button
+                onClick={() => { setSelectedTeam(''); fetchSchedule(); }}
+                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"
+              >
+                Clear Filter
+              </button>
+            </Show>
+          </div>
+
+          {/* Stats Summary */}
+          <div class="text-center mt-4 text-gray-400 text-sm">
+            Showing {games().length} games
+            {selectedTeam() && ` for ${selectedTeam()}`}
           </div>
         </div>
 

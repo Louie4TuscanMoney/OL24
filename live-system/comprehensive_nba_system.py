@@ -172,7 +172,7 @@ class ComprehensiveNBASystem:
     # SCHEDULE MANAGER
     # ========================================================================
     
-    def fetch_nba_schedule(self, days_ahead=30):
+    def fetch_nba_schedule(self, days_ahead=180):
         """
         Fetch NBA schedule using NBA_API
         """

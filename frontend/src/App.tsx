@@ -9,11 +9,13 @@
  * - Team pages with lineups
  */
 
-import { type Component, createSignal, createEffect } from 'solid-js';
-import Dashboard from './components/Dashboard';
-import StatsPage from './components/StatsPage';
-import SchedulePage from './components/SchedulePage';
-import TeamPage from './components/TeamPage';
+import { type Component, createSignal, createEffect, lazy } from 'solid-js';
+
+// Lazy load pages for faster initial load
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const StatsPage = lazy(() => import('./components/StatsPage'));
+const SchedulePage = lazy(() => import('./components/SchedulePage'));
+const TeamPage = lazy(() => import('./components/TeamPage'));
 
 const App: Component = () => {
   const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'team'>('predictions');
