@@ -9,7 +9,7 @@
  * - Team pages with lineups
  */
 
-import { type Component, createSignal } from 'solid-js';
+import { type Component, createSignal, createEffect } from 'solid-js';
 import Dashboard from './components/Dashboard';
 import StatsPage from './components/StatsPage';
 import SchedulePage from './components/SchedulePage';
@@ -18,6 +18,36 @@ import TeamPage from './components/TeamPage';
 const App: Component = () => {
   const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'team'>('predictions');
   const [selectedTeam, setSelectedTeam] = createSignal('LAL');
+
+  // Handle URL-based routing
+  createEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/team/')) {
+      const teamAbbr = path.split('/')[2];
+      setSelectedTeam(teamAbbr);
+      setCurrentPage('team');
+    } else if (path === '/stats') {
+      setCurrentPage('stats');
+    } else if (path === '/schedule') {
+      setCurrentPage('schedule');
+    } else {
+      setCurrentPage('predictions');
+    }
+  });
+
+  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'team', team?: string) => {
+    if (page === 'team' && team) {
+      window.history.pushState({}, '', `/team/${team}`);
+      setSelectedTeam(team);
+    } else if (page === 'stats') {
+      window.history.pushState({}, '', '/stats');
+    } else if (page === 'schedule') {
+      window.history.pushState({}, '', '/schedule');
+    } else {
+      window.history.pushState({}, '', '/');
+    }
+    setCurrentPage(page);
+  };
 
   return (
     <div>
@@ -31,7 +61,7 @@ const App: Component = () => {
             </div>
             <div class="flex gap-2">
               <button
-                onClick={() => setCurrentPage('predictions')}
+                onClick={() => navigate('predictions')}
                 class={`px-4 py-2 rounded-lg font-semibold transition-all ${
                   currentPage() === 'predictions'
                     ? 'bg-blue-600 text-white'
@@ -41,7 +71,7 @@ const App: Component = () => {
                 🔮 Live Predictions
               </button>
               <button
-                onClick={() => setCurrentPage('stats')}
+                onClick={() => navigate('stats')}
                 class={`px-4 py-2 rounded-lg font-semibold transition-all ${
                   currentPage() === 'stats'
                     ? 'bg-blue-600 text-white'
@@ -51,7 +81,7 @@ const App: Component = () => {
                 📊 Stats & Injuries
               </button>
               <button
-                onClick={() => setCurrentPage('schedule')}
+                onClick={() => navigate('schedule')}
                 class={`px-4 py-2 rounded-lg font-semibold transition-all ${
                   currentPage() === 'schedule'
                     ? 'bg-blue-600 text-white'
@@ -61,10 +91,7 @@ const App: Component = () => {
                 📅 Schedule
               </button>
               <button
-                onClick={() => {
-                  setCurrentPage('team');
-                  setSelectedTeam('LAL');
-                }}
+                onClick={() => navigate('team', 'LAL')}
                 class={`px-4 py-2 rounded-lg font-semibold transition-all ${
                   currentPage() === 'team'
                     ? 'bg-blue-600 text-white'
@@ -80,7 +107,7 @@ const App: Component = () => {
 
       {/* Page Content */}
       {currentPage() === 'predictions' && <Dashboard />}
-      {currentPage() === 'stats' && <StatsPage />}
+      {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
       {currentPage() === 'schedule' && <SchedulePage />}
       {currentPage() === 'team' && <TeamPage teamAbbr={selectedTeam()} />}
     </div>

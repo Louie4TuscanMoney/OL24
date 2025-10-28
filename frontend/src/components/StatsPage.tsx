@@ -20,7 +20,11 @@ interface Injury {
   description: string;
 }
 
-const StatsPage: Component = () => {
+interface Props {
+  onTeamClick?: (teamAbbr: string) => void;
+}
+
+const StatsPage: Component<Props> = (props) => {
   // const [topScorers, setTopScorers] = createSignal<PlayerStats[]>([]);
   // const [topRebounders, setTopRebounders] = createSignal<PlayerStats[]>([]);
   // const [topAssists, setTopAssists] = createSignal<PlayerStats[]>([]);
@@ -76,7 +80,10 @@ const StatsPage: Component = () => {
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <For each={teams()}>
                 {(team) => (
-                  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-blue-500 transition-all cursor-pointer">
+                  <div 
+                    onClick={() => props.onTeamClick?.(team.abbreviation)}
+                    class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-blue-500 transition-all cursor-pointer hover:scale-105 transform"
+                  >
                     <div class="flex items-center gap-3 mb-2">
                       <Show when={team.logo_url}>
                         <img src={team.logo_url} alt={team.abbreviation} class="w-12 h-12" />

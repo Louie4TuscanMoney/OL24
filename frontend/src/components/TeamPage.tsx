@@ -37,13 +37,21 @@ const TeamPage: Component<Props> = (props) => {
 
   const API_BASE = 'https://ol24-production.up.railway.app';
 
+  const [teamStats, setTeamStats] = createSignal<any>(null);
+
   onMount(async () => {
     try {
+      // Fetch team info from teams API
+      const teamsRes = await fetch(`${API_BASE}/api/stats/teams`);
+      const teamsData = await teamsRes.json();
+      const teamInfo = (teamsData.teams || []).find((t: any) => t.abbreviation === props.teamAbbr);
+      setTeamStats(teamInfo);
+      setTeamName(teamInfo?.full_name || props.teamAbbr);
+
       // Fetch depth chart
       const depthRes = await fetch(`${API_BASE}/api/team/${props.teamAbbr}/depth-chart`);
       const depthData = await depthRes.json();
       
-      setTeamName(depthData.team?.name || props.teamAbbr);
       setStarters(depthData.starters || []);
       setDepthChart(depthData.depth_chart || {});
 
@@ -63,15 +71,52 @@ const TeamPage: Component<Props> = (props) => {
   return (
     <div class="min-h-screen bg-gradient-to-br from-gray-900 via-indigo-900 to-gray-900 p-6">
       <div class="max-w-7xl mx-auto">
-        {/* Header */}
+        {/* Header with Team Logo */}
         <div class="text-center mb-8">
+          <Show when={teamStats()?.logo_url}>
+            <img 
+              src={teamStats()!.logo_url} 
+              alt={props.teamAbbr} 
+              class="w-32 h-32 mx-auto mb-4"
+            />
+          </Show>
           <h1 class="text-5xl font-bold text-white mb-2">
             {teamName() || props.teamAbbr}
           </h1>
-          <p class="text-gray-400 text-lg">
-            Depth Chart, Schedule & Analytics
-          </p>
+          <Show when={teamStats()}>
+            <div class="flex items-center justify-center gap-6 text-gray-400 text-lg">
+              <span class="text-2xl font-bold text-white">{teamStats()!.wins}-{teamStats()!.losses}</span>
+              <span>•</span>
+              <span>{teamStats()!.ppg?.toFixed(1) || 'N/A'} PPG</span>
+              <span>•</span>
+              <span>{teamStats()!.games_played || 0} GP</span>
+            </div>
+          </Show>
         </div>
+
+        {/* Team Stats Dashboard */}
+        <Show when={teamStats() && !loading()}>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div class="text-gray-400 text-sm mb-1">Points Per Game</div>
+              <div class="text-3xl font-bold text-white">{teamStats()!.ppg?.toFixed(1) || 'N/A'}</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div class="text-gray-400 text-sm mb-1">Win Percentage</div>
+              <div class="text-3xl font-bold text-green-400">
+                {((teamStats()!.wins / (teamStats()!.wins + teamStats()!.losses)) * 100).toFixed(1) || 0}%
+              </div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div class="text-gray-400 text-sm mb-1">Games Played</div>
+              <div class="text-3xl font-bold text-white">{teamStats()!.games_played || 0}</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div class="text-gray-400 text-sm mb-1">Record</div>
+              <div class="text-3xl font-bold text-white">{teamStats()!.wins}-{teamStats()!.losses}</div>
+            </div>
+          </div>
+        </Show>
 
         <Show when={loading()}>
           <div class="text-center text-white text-xl">Loading...</div>
