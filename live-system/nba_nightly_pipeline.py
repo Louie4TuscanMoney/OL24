@@ -421,10 +421,10 @@ class NBANightlyPipeline:
                     count += 1
             
             print(f"      ✅ Updated RAPM for {count} players")
+            return count
         else:
             print(f"      ⚠️ Not enough data for RAPM ({len(X)} stints)")
-        
-        return len(game_ids)
+            return 0
     
     def prune_and_refresh_last10(self):
         """

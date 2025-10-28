@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS player_box_scores (
     on_court_netrtg FLOAT,
     off_court_netrtg FLOAT,
     
-    PRIMARY KEY (player_id, game_id)
+    PRIMARY KEY (player_id, game_id, game_date)
 ) PARTITION BY RANGE (game_date);
 
 -- Partitions (one per season)
