@@ -6,8 +6,8 @@
 import { createSignal } from 'solid-js';
 import type { WSMessage, NBAGame, Prediction, Edge, BettingRecommendation, ScorePattern } from '../types';
 
-// WebSocket URL (change for production)
-const WS_URL = 'ws://localhost:8765';
+// WebSocket URL - Use Railway backend in production
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://ol24-production.up.railway.app/ws';
 
 export class WebSocketService {
   private ws: WebSocket | null = null;
