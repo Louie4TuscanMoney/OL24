@@ -72,7 +72,19 @@ export class WebSocketService {
       if (message.live_games) {
         const gamesMap = new Map();
         message.live_games.forEach((game: any) => {
-          gamesMap.set(game.game_id, game);
+          // Map backend fields to frontend types
+          const mappedGame: NBAGame = {
+            game_id: game.game_id,
+            home_team: game.home_team,
+            away_team: game.away_team,
+            score_home: game.home_score,
+            score_away: game.away_score,
+            quarter: game.period, // Backend sends 'period', frontend expects 'quarter'
+            time_remaining: game.clock, // Backend sends 'clock', frontend expects 'time_remaining'
+            clock: game.clock, // Keep original for compatibility
+            is_live: game.status === 2 // status 2 = live
+          };
+          gamesMap.set(game.game_id, mappedGame);
         });
         this.games[1](gamesMap);
       }
