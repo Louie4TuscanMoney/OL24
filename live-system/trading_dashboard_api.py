@@ -1058,22 +1058,34 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         while True:
-            # Build complete message package
-            message = await build_complete_message()
-            
-            # Send to frontend
-            await websocket.send_json(message)
-            
-            # ⚡ ULTRA REAL-TIME: 1-second updates!
-            # Eliminates all perceived lag, scores update instantly
-            await asyncio.sleep(1)
+            try:
+                # Build complete message package
+                message = await build_complete_message()
+                
+                # Send to frontend
+                await websocket.send_json(message)
+                
+                # ⚡ ULTRA REAL-TIME: 1-second updates!
+                # Eliminates all perceived lag, scores update instantly
+                await asyncio.sleep(1)
+                
+            except Exception as e:
+                print(f"⚠️ Error in message loop (continuing): {e}")
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(1)  # Wait before retry
+                continue  # Don't disconnect, just retry
             
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        if websocket in active_connections:
+            active_connections.remove(websocket)
         print(f"❌ WebSocket disconnected: {websocket.client}")
     except Exception as e:
-        print(f"❌ WebSocket error: {e}")
-        active_connections.remove(websocket)
+        print(f"❌ WebSocket fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        if websocket in active_connections:
+            active_connections.remove(websocket)
 
 
 async def build_complete_message() -> dict:
