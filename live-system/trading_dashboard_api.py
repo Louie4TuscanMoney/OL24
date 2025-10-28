@@ -1160,11 +1160,19 @@ async def build_complete_message() -> dict:
 
 
 def get_db_connection():
-    """Get PostgreSQL connection for stats queries"""
+    """Get PostgreSQL connection for stats queries (OPTIMIZED with connection reuse)"""
     DATABASE_URL = os.environ.get('DATABASE_URL')
     if DATABASE_URL:
         import psycopg2
-        return psycopg2.connect(DATABASE_URL)
+        # Use connection with keepalive for faster queries
+        return psycopg2.connect(
+            DATABASE_URL,
+            connect_timeout=3,  # Fast timeout
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=5
+        )
     return None
 
 

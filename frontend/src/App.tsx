@@ -9,7 +9,9 @@
  * - Team pages with lineups
  */
 
-import { type Component, createSignal, createEffect, lazy, Suspense } from 'solid-js';
+import { type Component, createSignal, createEffect, lazy, Suspense, Show } from 'solid-js';
+import LoadingScreen from './components/LoadingScreen';
+import { wsService } from './services/websocket';
 
 // Lazy load pages for faster initial load
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -18,15 +20,18 @@ const SchedulePage = lazy(() => import('./components/SchedulePage'));
 const TeamPage = lazy(() => import('./components/TeamPage'));
 const TeamsDirectory = lazy(() => import('./components/TeamsDirectory'));
 
-const LoadingSpinner = () => (
-  <div class="flex items-center justify-center min-h-screen">
-    <div class="text-white text-2xl">Loading...</div>
-  </div>
-);
-
 const App: Component = () => {
   const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team'>('predictions');
   const [selectedTeam, setSelectedTeam] = createSignal('');
+  const [initialLoading, setInitialLoading] = createSignal(true);
+  const [connected] = wsService.connected;
+
+  // Hide loading screen after connection OR after 3 seconds (for non-live pages)
+  createEffect(() => {
+    if (connected() || currentPage() !== 'predictions') {
+      setTimeout(() => setInitialLoading(false), 500); // Small delay for smooth transition
+    }
+  });
 
   // Handle URL-based routing
   createEffect(() => {
@@ -68,8 +73,15 @@ const App: Component = () => {
 
   return (
     <div>
-      {/* Navigation Bar */}
-      <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
+      {/* Loading Screen (shows on initial load for Predictions page) */}
+      <Show when={initialLoading() && currentPage() === 'predictions'}>
+        <LoadingScreen message="Connecting to NBA Live API..." />
+      </Show>
+
+      {/* Main App (hidden during initial loading) */}
+      <Show when={!initialLoading() || currentPage() !== 'predictions'}>
+        {/* Navigation Bar */}
+        <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4">
           <div class="flex items-center justify-between h-16">
             <div class="flex items-center gap-2">
@@ -122,14 +134,15 @@ const App: Component = () => {
         </div>
       </nav>
 
-      {/* Page Content */}
-      <Suspense fallback={<LoadingSpinner />}>
-        {currentPage() === 'predictions' && <Dashboard />}
-        {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
-        {currentPage() === 'schedule' && <SchedulePage />}
-        {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
-        {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
-      </Suspense>
+        {/* Page Content */}
+        <Suspense fallback={<div class="flex justify-center items-center min-h-screen"><div class="text-white text-xl">Loading page...</div></div>}>
+          {currentPage() === 'predictions' && <Dashboard />}
+          {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
+          {currentPage() === 'schedule' && <SchedulePage />}
+          {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
+          {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
+        </Suspense>
+      </Show>
     </div>
   );
 };
