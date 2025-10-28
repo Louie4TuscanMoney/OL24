@@ -662,22 +662,16 @@ class LiveTradingEngine:
                 'timestamp': datetime.now().isoformat()
             }
     
-    def scan_live_opportunities(self, continuous_mode: bool = True) -> List[Dict]:
+    def scan_live_opportunities(self) -> List[Dict]:
         """
         Scan all live games for betting opportunities
-        NOW SUPPORTS CONTINUOUS PREDICTIONS (every 30s during live games)
-        
-        Args:
-            continuous_mode: If True, makes predictions for ALL live games continuously
+        ONLY PREDICTS AT Q2 6:00+ (model trained on 18-minute patterns)
         
         Returns:
             List of ALL predictions (betting opportunities flagged separately)
         """
         print("\n" + "="*80)
-        if continuous_mode:
-            print("🔄 CONTINUOUS MODE: Extracting features + predictions every 30s")
-        else:
-            print("🔍 SCANNING ALL LIVE GAMES FOR PREDICTIONS")
+        print("🔍 SCANNING FOR Q2 6:00 PREDICTION WINDOWS")
         print("="*80 + "\n")
         
         # Get live games
@@ -696,18 +690,14 @@ class LiveTradingEngine:
             clock = game.get('clock', '')
             game_status = game.get('status', 1)
             
-            # ENHANCED: Continuous mode predicts on ALL live games (Q1-Q4)
-            if continuous_mode:
-                # Any live game (status 2) is eligible for continuous predictions
-                can_predict = game_status == 2 and period >= 1 and period <= 4
-            else:
-                # Original mode: Only Q2 6:00 and beyond
-                can_predict = (
-                    game.get('can_predict', False) or
-                    (period >= 2 and period <= 4) or
-                    (period == 2 and '6:' in clock) or
-                    (period >= 3)
-                )
+            # CRITICAL: Only predict when we have 18+ minutes of data
+            # Model was trained on Q1 start → Q2 6:00 (18 minutes)
+            # Using it at other times gives INACCURATE predictions!
+            can_predict = (
+                game.get('can_predict', False) or  # Q2 6:00 exactly
+                (period == 2 and game_status == 2) or  # Any time in Q2 (18+ min)
+                (period >= 3 and game_status == 2)  # Q3+ (30+ min, still valid)
+            )
             
             if not can_predict:
                 continue

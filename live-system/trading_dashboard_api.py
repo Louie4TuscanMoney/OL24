@@ -1089,9 +1089,6 @@ async def websocket_endpoint(websocket: WebSocket):
             active_connections.remove(websocket)
 
 
-_last_prediction_time = 0
-_prediction_interval = 30  # Run ML predictions every 30 seconds
-
 async def build_complete_message() -> dict:
     """
     Build complete message package with ALL analysis done
@@ -1099,13 +1096,11 @@ async def build_complete_message() -> dict:
     Returns:
         Complete WebSocket message with:
         - Live games (updated every 1s)
-        - Mamba predictions (updated every 30s)
+        - Mamba predictions (checked every call, only at Q2 6:00+)
         - BetOnline odds
         - OntoRisk analysis
         - System status
     """
-    global _last_prediction_time
-    
     try:
         # Get live games (FAST - every call)
         if nba_api:
@@ -1113,21 +1108,12 @@ async def build_complete_message() -> dict:
         else:
             live_games = []
         
-        # Get betting opportunities (SLOWER - every 30s for ML predictions)
-        current_time = time.time()
-        if trading_engine and (current_time - _last_prediction_time) >= _prediction_interval:
-            print(f"🔄 Running ML predictions (30s interval)")
-            _last_prediction_time = current_time
-            opportunities = trading_engine.scan_live_opportunities(continuous_mode=True)
-        elif trading_engine and hasattr(trading_engine, '_cached_opportunities'):
-            # Use cached predictions between 30s intervals
-            opportunities = trading_engine._cached_opportunities
+        # Get betting opportunities (checks Q2 6:00 window)
+        # Model only predicts when game has 18+ minutes of play
+        if trading_engine:
+            opportunities = trading_engine.scan_live_opportunities()
         else:
             opportunities = []
-            
-        # Cache opportunities for next calls
-        if trading_engine and opportunities:
-            trading_engine._cached_opportunities = opportunities
         
         # Get system status
         system_status = {
