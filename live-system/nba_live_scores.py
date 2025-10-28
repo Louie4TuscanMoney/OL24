@@ -55,8 +55,8 @@ class NBALiveScores:
         
     def get_todays_games(self) -> List[Dict]:
         """
-        Get today's games - ESPN API for FASTEST updates!
-        Optimized with 10-second cache to reduce API calls
+        Get today's games - USE NBA_API for correct game IDs!
+        ESPN has wrong game IDs that don't work with play-by-play
         
         Returns:
             List of game dicts with current state
@@ -68,31 +68,7 @@ class NBALiveScores:
             if time_since_fetch < self._cache_duration:
                 return self._cached_games
         
-        # METHOD 1: ESPN API (FASTEST - updates every 10 seconds!)
-        try:
-            response = requests.get(self.scoreboard_url, headers=self.headers, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            games = []
-            
-            if 'events' in data:
-                for event in data['events']:
-                    parsed = self._parse_espn_game(event)
-                    if parsed:
-                        games.append(parsed)
-            
-            if games:
-                print(f"✅ ESPN API: {len(games)} games (NO CACHE - DIRECT FETCH!)")
-                # Cache the results
-                self._last_fetch_time = now
-                self._cached_games = games
-                return games
-                    
-        except Exception as e:
-            print(f"⚠️ ESPN API failed: {e}, trying nba_api...")
-        
-        # METHOD 2: Use nba_api library (good but slower than ESPN)
+        # METHOD 1: Use nba_api library FIRST (correct game IDs!)
         if NBA_API_AVAILABLE:
             try:
                 board = scoreboard.ScoreBoard()
@@ -106,7 +82,10 @@ class NBALiveScores:
                             games.append(parsed)
                 
                 if games:
-                    print(f"✅ nba_api library: {len(games)} games (30-60 sec delay)")
+                    print(f"✅ nba_api library: {len(games)} games (CORRECT GAME IDs!)")
+                    # Cache the results
+                    self._last_fetch_time = now
+                    self._cached_games = games
                     return games
                     
             except Exception as e:
@@ -213,7 +192,7 @@ class NBALiveScores:
             away_tricode = away_team.get('teamTricode', '')
             
             is_q2_6min = self._is_q2_6min(period, game_clock)
-            can_predict = self._can_predict(game_status, period, clock)
+            can_predict = self._can_predict(game_status, period, game_clock)
             
             return {
                 'game_id': game_id,

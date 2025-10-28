@@ -556,12 +556,13 @@ class LiveTradingEngine:
     def scan_live_opportunities(self) -> List[Dict]:
         """
         Scan all live games for betting opportunities
+        NOW RETURNS ALL PREDICTIONS FOR DISPLAY (not just betting opps)
         
         Returns:
-            List of opportunities
+            List of ALL predictions (betting opportunities flagged separately)
         """
         print("\n" + "="*80)
-        print("🔍 SCANNING LIVE OPPORTUNITIES")
+        print("🔍 SCANNING ALL LIVE GAMES FOR PREDICTIONS")
         print("="*80 + "\n")
         
         # Get live games
@@ -572,11 +573,11 @@ class LiveTradingEngine:
         lines = self.line_scraper.get_live_lines()
         print(f"💰 Found {len(lines)} lines\n")
         
-        # Match games to lines
-        opportunities = []
+        # ALL PREDICTIONS (for display)
+        all_predictions = []
         
         for game in games:
-            # ENHANCED: Check ALL live games, not just Q2 6:00
+            # MODIFIED: Check ALL live games, not just Q2 6:00
             period = game.get('period', 0)
             clock = game.get('clock', '')
             
@@ -591,24 +592,34 @@ class LiveTradingEngine:
             if not can_predict:
                 continue
             
-            # Find matching line
+            # Find matching line (or use synthetic)
             line = None
             for l in lines:
                 if l['home_team'] == game['home_team'] and l['away_team'] == game['away_team']:
                     line = l
                     break
             
+            # If no line, create synthetic one for prediction
             if line is None:
-                continue
+                line = {
+                    'home_team': game['home_team'],
+                    'away_team': game['away_team'],
+                    'spread': game['current_diff'] * 0.8,  # Synthetic
+                    'spread_odds': None,
+                    'source': 'SYNTHETIC'
+                }
+                print(f"⚠️ No line for {game['away_team']} @ {game['home_team']}, using synthetic")
             
-            # Make prediction
+            # ALWAYS make prediction for display
             prediction = self.make_live_prediction(game, line)
             
-            # Include ALL predictions (both betting and context)
+            # Include ALL predictions (user wants to see EVERYTHING)
             if prediction:
-                opportunities.append(prediction)
+                all_predictions.append(prediction)
+                print(f"✅ Prediction made for {game['away_team']} @ {game['home_team']}")
         
-        return opportunities
+        print(f"\n📊 Total predictions: {len(all_predictions)}")
+        return all_predictions
     
     def _extract_live_features_enhanced(self, game: Dict, line: Dict) -> Optional[np.ndarray]:
         """

@@ -14,7 +14,7 @@ import pandas as pd
 from typing import Dict, Optional, List
 from datetime import datetime
 import time
-from nba_api.stats.endpoints import playbyplayv2
+from nba_api.live.nba.endpoints import playbyplay
 from scipy.fft import fft
 from scipy.stats import entropy
 
@@ -216,12 +216,15 @@ class MambaLiveFeatureExtractor:
             else:
                 # Fetch from NBA API
                 time.sleep(0.6)  # Rate limiting
-                pbp = playbyplayv2.PlayByPlayV2(game_id=game_id, timeout=30)
-                pbp_df = pbp.get_data_frames()[0]
+                pbp = playbyplay.PlayByPlay(game_id=game_id)
+                actions = pbp.actions.get_dict()
                 
-                if pbp_df.empty:
+                if not actions:
                     print("❌ Empty play-by-play data")
                     return None
+                
+                # Convert to DataFrame format for compatibility
+                pbp_df = pd.DataFrame(actions)
                 
                 # Cache it
                 if self.cache_pbp:
@@ -236,21 +239,30 @@ class MambaLiveFeatureExtractor:
             minute_diffs = {}
             
             for _, row in pbp_df.iterrows():
-                period = row['PERIOD']
-                time_str = row['PCTIMESTRING']
-                score = row.get('SCORE')
+                period = row['period']
+                time_str = row['clock']
+                score_home = row.get('scoreHome')
+                score_away = row.get('scoreAway')
                 
                 # Skip if no score
-                if pd.isna(score) or not isinstance(score, str) or '-' not in score:
+                if pd.isna(score_home) or pd.isna(score_away):
                     continue
                 
                 try:
-                    # Parse score (format: "15-12" or "12-15")
-                    home_score, away_score = map(int, score.split('-'))
+                    # Parse score 
+                    home_score = int(score_home)
+                    away_score = int(score_away)
                     diff = home_score - away_score
                     
                     # Calculate elapsed minutes
-                    mins, secs = map(int, time_str.split(':'))
+                    # Parse clock format: "PT06M30.00S" → 6 mins, 30 secs
+                    if 'PT' in time_str:
+                        mins = int(time_str.split('M')[0].replace('PT', ''))
+                        secs_part = time_str.split('M')[1].replace('S', '').split('.')[0]
+                        secs = int(secs_part) if secs_part else 0
+                    else:
+                        # Fallback for MM:SS format
+                        mins, secs = map(int, time_str.split(':'))
                     
                     if period == 1:
                         # Q1: minute 0-11
