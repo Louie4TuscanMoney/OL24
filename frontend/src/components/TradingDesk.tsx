@@ -225,28 +225,28 @@ const TradingDesk: Component<{
                 <div class="bg-black/30 rounded-xl p-4 text-center">
                   <div class="text-xs text-gray-400 uppercase mb-1">ML Spread</div>
                   <div class="text-2xl font-black text-white">
-                    {mlPred()?.predicted_spread > 0 ? '+' : ''}{mlPred()?.predicted_spread.toFixed(1)}
+                    {mlPred()?.predicted_spread && mlPred()!.predicted_spread > 0 ? '+' : ''}{mlPred()?.predicted_spread?.toFixed(1) || '--'}
                   </div>
                 </div>
                 
                 <div class="bg-black/30 rounded-xl p-4 text-center">
                   <div class="text-xs text-gray-400 uppercase mb-1">90% CI</div>
                   <div class="text-sm font-bold text-blue-400">
-                    {mlPred()?.confidence_interval_90[0].toFixed(1)} to {mlPred()?.confidence_interval_90[1].toFixed(1)}
+                    {mlPred()?.confidence_interval_90?.[0]?.toFixed(1) || '--'} to {mlPred()?.confidence_interval_90?.[1]?.toFixed(1) || '--'}
                   </div>
                 </div>
                 
                 <div class="bg-black/30 rounded-xl p-4 text-center">
                   <div class="text-xs text-gray-400 uppercase mb-1">Win Prob</div>
                   <div class="text-2xl font-black text-green-400">
-                    {(mlPred()!.win_probability * 100).toFixed(1)}%
+                    {mlPred()?.win_probability ? (mlPred()!.win_probability * 100).toFixed(1) : '--'}%
                   </div>
                 </div>
                 
                 <div class="bg-black/30 rounded-xl p-4 text-center">
                   <div class="text-xs text-gray-400 uppercase mb-1">Confidence</div>
                   <div class="text-2xl font-black text-yellow-400">
-                    {(mlPred()!.model_confidence * 100).toFixed(0)}%
+                    {mlPred()?.model_confidence ? (mlPred()!.model_confidence * 100).toFixed(0) : '--'}%
                   </div>
                 </div>
               </div>

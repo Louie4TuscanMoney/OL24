@@ -50,7 +50,7 @@ class NBALiveScores:
         self._last_nba_api_call = 0
         self._last_espn_api_call = 0
         self._nba_api_cooldown = 1.0  # Wait 1 second between nba_api calls
-        self._espn_api_cooldown = 1.0  # ⚡ 1-SECOND UPDATES (ESPN limit)
+        self._espn_api_cooldown = 0.1  # ⚡ ULTRA-FAST: 10 calls/sec max (WebSocket calls 1/sec)
         
         # Consecutive failures tracking
         self._nba_api_failures = 0
@@ -61,11 +61,11 @@ class NBALiveScores:
         # CACHE LAST VALID DATA (prevents stale CDN fallback)
         self._last_valid_games = []
         self._last_valid_timestamp = 0
-        self._cache_max_age = 30  # Cache is valid for 30 seconds (be patient!)
+        self._cache_max_age = 5  # ⚡ Cache valid for only 5 seconds (ultra-fresh data!)
         
-        print(f"✅ NBA API initialized: 1-SECOND ESPN REFRESH with 30s smart cache")
-        print(f"   Strategy: ESPN every 1s → Use cache if rate limited → Never panic")
-        print(f"   Cache keeps live data stable even during brief API hiccups")
+        print(f"✅ NBA API initialized: REAL-TIME ESPN (0.1s cooldown)")
+        print(f"   Strategy: ESPN EVERY WebSocket call (1/sec) → Cache if failed → Fresh data always")
+        print(f"   Cache: 5s max age, prioritizes live ESPN over stale CDN")
         
     def get_todays_games(self) -> List[Dict]:
         """
@@ -131,8 +131,10 @@ class NBALiveScores:
         
         # METHOD 2: ESPN API (ULTRA FAST - 1 SECOND UPDATES!)
         # Check rate limiting first
-        if (now - self._last_espn_api_call) >= self._espn_api_cooldown:
+        time_since_last_call = now - self._last_espn_api_call
+        if time_since_last_call >= self._espn_api_cooldown:
             try:
+                print(f"⚡ ESPN API CALL (last call {time_since_last_call:.3f}s ago)")
                 self._last_espn_api_call = now
                 response = requests.get(self.scoreboard_url, headers=self.headers, timeout=3)
                 response.raise_for_status()
@@ -146,7 +148,11 @@ class NBALiveScores:
                             games.append(parsed)
                 
                 if games:
-                    print(f"✅ ESPN API: {len(games)} games (1-SECOND UPDATE!)")
+                    # Show detailed status for each game
+                    for game in games:
+                        print(f"   ESPN: {game['away_team']} @ {game['home_team']}: {game['away_score']}-{game['home_score']} | Q{game['period']} {game['clock']} | {game['status_text']}")
+                    
+                    print(f"✅ ESPN API SUCCESS: {len(games)} games returned")
                     self._last_valid_games = games  # CACHE for rate limiting
                     self._last_valid_timestamp = now
                     return games
@@ -154,12 +160,12 @@ class NBALiveScores:
             except Exception as e:
                 print(f"⚠️ ESPN failed: {e}, trying CDN...")
         else:
-            # ESPN rate limited - USE CACHE (be patient, don't panic!)
+            # ESPN rate limited (shouldn't happen with 0.1s cooldown + 1s WebSocket calls)
             age = now - self._last_valid_timestamp
             if self._last_valid_games and age < self._cache_max_age:
-                print(f"⚡ ESPN rate limited → Using cache ({age:.1f}s old, still fresh)")
+                print(f"⚡ Using cache ({age:.1f}s old) - ESPN called {now - self._last_espn_api_call:.2f}s ago")
                 return self._last_valid_games
-            print(f"⚠️ ESPN rate limited + stale cache → trying CDN...")
+            print(f"⚠️ Cache expired ({age:.1f}s old) → trying CDN...")
         
         # METHOD 3: Fallback to CDN (5-10 min delay - ALMOST NEVER USE THIS!)
         # Prefer cache over stale CDN unless cache is REALLY old
@@ -233,6 +239,13 @@ class NBALiveScores:
             home_tricode = home_team.get('team', {}).get('abbreviation', '')
             away_tricode = away_team.get('team', {}).get('abbreviation', '')
             
+            # 🚨 CRITICAL FIX: NEVER show live game as "scheduled"
+            # If game has started (scores > 0, or period > 0, or has clock), force status to LIVE
+            if game_status == 1:  # Currently "scheduled"
+                if (home_score > 0 or away_score > 0 or period > 0 or (clock and clock != '0:00')):
+                    print(f"⚠️ Game {game_id} has scores/period but marked scheduled! Forcing to LIVE")
+                    game_status = 2  # Force to LIVE
+            
             is_q2_6min = self._is_q2_6min(period, clock)
             can_predict = self._can_predict(game_status, period, clock)
             
@@ -277,6 +290,12 @@ class NBALiveScores:
             
             home_tricode = home_team.get('teamTricode', '')
             away_tricode = away_team.get('teamTricode', '')
+            
+            # 🚨 CRITICAL FIX: NEVER show live game as "scheduled"
+            if game_status == 1:  # Currently "scheduled"
+                if (home_score > 0 or away_score > 0 or period > 0 or (game_clock and game_clock != '0:00')):
+                    print(f"⚠️ nba_api: Game {game_id} has scores/period but marked scheduled! Forcing to LIVE")
+                    game_status = 2  # Force to LIVE
             
             is_q2_6min = self._is_q2_6min(period, game_clock)
             can_predict = self._can_predict(game_status, period, game_clock)
@@ -401,6 +420,12 @@ class NBALiveScores:
         
         period = game_data.get('period', 0)
         game_clock = game_data.get('gameClock', '')
+        
+        # 🚨 CRITICAL FIX: NEVER show live game as "scheduled"
+        if game_status == 1:  # Currently "scheduled"
+            if (home_score > 0 or away_score > 0 or period > 0 or (game_clock and game_clock != '0:00')):
+                print(f"⚠️ CDN: Game {game_id} has scores/period but marked scheduled! Forcing to LIVE")
+                game_status = 2  # Force to LIVE
         
         return {
             'game_id': game_id,

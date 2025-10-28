@@ -4,7 +4,7 @@
  * Professional sports trading interface
  */
 
-import { type Component, For, Show, onMount, onCleanup } from 'solid-js';
+import { type Component, For, Show, onMount, onCleanup, createSignal } from 'solid-js';
 import { wsService } from '../services/websocket';
 import GameCardExpanded from './GameCardExpanded';
 import SystemStatus from './SystemStatus';
@@ -249,32 +249,93 @@ const Dashboard: Component<DashboardProps> = (props) => {
                       </div>
                     </div>
 
-                    {/* ML Prediction (if available) */}
+                    {/* ML PREDICTION FEED (if available) */}
                     <Show when={predictions().get(game.game_id)}>
-                      {(pred) => (
-                        <div class="mt-4 pt-4 border-t border-gray-800">
-                          <div class="grid grid-cols-3 gap-3 text-center">
-                            <div>
-                              <div class="text-xs text-gray-500 mb-1">Forecast</div>
-                              <div class="text-sm font-bold text-purple-400">
-                                {pred().point_forecast?.toFixed(1) || 'N/A'}
+                      {(pred) => {
+                        const [showJSON, setShowJSON] = createSignal(false);
+                        return (
+                          <div class="mt-4 pt-4 border-t border-purple-900/30">
+                            {/* ML Header */}
+                            <div class="flex items-center justify-between mb-3">
+                              <div class="flex items-center gap-2">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                                <span class="text-purple-400 font-bold text-xs uppercase tracking-wide">🤖 Mamba Prediction</span>
+                              </div>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowJSON(!showJSON());
+                                }}
+                                class="text-xs text-gray-500 hover:text-purple-400 transition-colors"
+                              >
+                                {showJSON() ? 'Hide' : 'Show'} JSON
+                              </button>
+                            </div>
+
+                            {/* ML Metrics Grid */}
+                            <div class="grid grid-cols-4 gap-2 mb-3">
+                              <div class="bg-purple-950/30 rounded-lg p-2 text-center">
+                                <div class="text-xs text-gray-500 mb-1">Spread</div>
+                                <div class="text-lg font-black text-white">
+                                  {pred().point_forecast > 0 ? '+' : ''}{pred().point_forecast?.toFixed(1) || '--'}
+                                </div>
+                              </div>
+                              <div class="bg-blue-950/30 rounded-lg p-2 text-center">
+                                <div class="text-xs text-gray-500 mb-1">90% CI</div>
+                                <div class="text-xs font-bold text-blue-400">
+                                  {pred().interval_lower?.toFixed(1) || '--'} to {pred().interval_upper?.toFixed(1) || '--'}
+                                </div>
+                              </div>
+                              <div class="bg-green-950/30 rounded-lg p-2 text-center">
+                                <div class="text-xs text-gray-500 mb-1">Win%</div>
+                                <div class="text-lg font-black text-green-400">
+                                  {pred().win_probability ? (pred().win_probability! * 100).toFixed(0) : '--'}%
+                                </div>
+                              </div>
+                              <div class="bg-yellow-950/30 rounded-lg p-2 text-center">
+                                <div class="text-xs text-gray-500 mb-1">Edge</div>
+                                <div class="text-lg font-black text-yellow-400">
+                                  {edges().get(game.game_id)?.has_edge ? '✓' : '—'}
+                                </div>
                               </div>
                             </div>
-                            <div>
-                              <div class="text-xs text-gray-500 mb-1">Interval</div>
-                              <div class="text-sm font-bold text-blue-400">
-                                {pred().interval_lower?.toFixed(1) || 'N/A'} - {pred().interval_upper?.toFixed(1) || 'N/A'}
-                              </div>
+
+                            {/* Detailed Status */}
+                            <div class="text-xs text-gray-500">
+                              <Show when={pred().is_q2_6min}>
+                                <div class="text-yellow-400 font-bold">⭐ Q2 6:00 TRADE SIGNAL ACTIVE</div>
+                              </Show>
+                              <Show when={!pred().is_q2_6min && pred().prediction_type === 'continuous'}>
+                                <div class="text-purple-400">📊 Continuous 30s prediction</div>
+                              </Show>
+                              <Show when={pred().timestamp}>
+                                <div>Last updated: {new Date(pred().timestamp).toLocaleTimeString()}</div>
+                              </Show>
                             </div>
-                            <div>
-                              <div class="text-xs text-gray-500 mb-1">Edge</div>
-                              <div class="text-sm font-bold text-green-400">
-                                {edges().get(game.game_id)?.has_edge ? '✓' : '-'}
+
+                            {/* RAW JSON (toggleable for transparency) */}
+                            <Show when={showJSON()}>
+                              <div 
+                                onClick={(e) => e.stopPropagation()}
+                                class="mt-3 bg-black/50 rounded-lg p-3 overflow-x-auto"
+                              >
+                                <pre class="text-xs text-green-400 font-mono">
+                                  {JSON.stringify(pred(), null, 2)}
+                                </pre>
                               </div>
-                            </div>
+                            </Show>
                           </div>
+                        );
+                      }}
+                    </Show>
+
+                    {/* ML Status if NOT available */}
+                    <Show when={!predictions().get(game.game_id)}>
+                      <div class="mt-4 pt-4 border-t border-gray-800">
+                        <div class="text-center text-gray-500 text-xs">
+                          {game.quarter >= 2 ? '⏳ Waiting for Q2 6:00 prediction window...' : '🏀 Collecting play-by-play data...'}
                         </div>
-                      )}
+                      </div>
                     </Show>
 
                     {/* Click hint */}

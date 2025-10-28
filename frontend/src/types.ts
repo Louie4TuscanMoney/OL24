@@ -24,6 +24,14 @@ export interface Prediction {
   interval_upper: number;
   coverage_probability: number;
   timestamp: string;
+  win_probability?: number;
+  is_q2_6min?: boolean;
+  prediction_type?: 'q2_6min' | 'continuous';
+  predicted_spread?: number;
+  confidence_interval_90?: [number, number];
+  model_confidence?: number;
+  edge_detected?: boolean;
+  edge_magnitude?: number;
 }
 
 // Score differential pattern (18 minutes)

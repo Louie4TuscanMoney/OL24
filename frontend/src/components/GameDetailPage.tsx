@@ -334,15 +334,70 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
             </div>
           </Show>
 
+          {/* BACKEND STATUS - What's happening right now */}
+          <div class="modern-card bg-gradient-to-br from-indigo-950/50 to-purple-950/50 border-indigo-500/30 mb-6">
+            <h2 class="text-xl font-bold text-white mb-4">🔬 Backend ML Feed Status</h2>
+            
+            <div class="space-y-3">
+              {/* ESPN API Status */}
+              <div class="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span class="text-white font-medium">ESPN API</span>
+                </div>
+                <span class="text-green-400 text-sm">1-second updates ⚡</span>
+              </div>
+
+              {/* ML Model Status */}
+              <div class="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <div class={`w-2 h-2 rounded-full ${mlPrediction() ? 'bg-purple-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                  <span class="text-white font-medium">Mamba ML Model</span>
+                </div>
+                <span class={`text-sm ${mlPrediction() ? 'text-purple-400' : 'text-gray-500'}`}>
+                  {mlPrediction() ? 'Predicting 🤖' : 'Waiting for Q2 6:00'}
+                </span>
+              </div>
+
+              {/* Prediction Frequency */}
+              <div class="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span class="text-white font-medium">Update Frequency</span>
+                </div>
+                <span class="text-blue-400 text-sm">
+                  {mlPrediction() ? 'Every 30 seconds' : 'Not running'}
+                </span>
+              </div>
+
+              {/* Features Extracted */}
+              <div class="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span class="text-white font-medium">Features</span>
+                </div>
+                <span class="text-yellow-400 text-sm">33 Mamba features from PBP</span>
+              </div>
+
+              {/* API Endpoint */}
+              <div class="p-3 bg-black/30 rounded-lg">
+                <div class="text-xs text-gray-500 mb-1">API Endpoint:</div>
+                <div class="text-xs text-blue-400 font-mono break-all">
+                  GET {API_BASE}/api/ml/prediction/{props.gameId}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* API Testing Panel */}
           <div class="modern-card">
             <div class="flex items-center justify-between mb-4">
-              <h2 class="text-xl font-bold text-white">API Testing & Live Data</h2>
+              <h2 class="text-xl font-bold text-white">📊 Live JSON Data Inspector</h2>
               <button
                 onClick={() => setShowJson(!showJson())}
                 class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all"
               >
-                {showJson() ? 'Hide JSON' : 'Show Live JSON'}
+                {showJson() ? 'Hide JSON' : 'Show Raw JSON'}
               </button>
             </div>
 
