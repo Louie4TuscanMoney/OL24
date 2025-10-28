@@ -45,7 +45,7 @@ const GameCard: Component<Props> = (props) => {
               <span class="text-red-500 font-semibold">LIVE</span>
             </span>
           </Show>
-          <span>Q{props.game.quarter} • {formatClock(props.game.time_remaining)}</span>
+          <span>Q{props.game.quarter} • {formatClock(props.game.time_remaining || props.game.clock)}</span>
         </div>
         <span class="text-xs">{props.game.game_id}</span>
       </div>

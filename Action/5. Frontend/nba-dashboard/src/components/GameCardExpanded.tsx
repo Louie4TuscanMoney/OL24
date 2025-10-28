@@ -43,7 +43,7 @@ const GameCardExpanded: Component<Props> = (props) => {
               <span class="text-red-500 font-semibold text-sm">LIVE</span>
             </span>
           </Show>
-          <span class="text-gray-400 text-sm">Q{props.game.quarter} • {formatClock(props.game.time_remaining)}</span>
+          <span class="text-gray-400 text-sm">Q{props.game.quarter} • {formatClock(props.game.time_remaining || props.game.clock)}</span>
         </div>
         <span class="text-xs text-gray-500">{props.game.game_id}</span>
       </div>

@@ -13,6 +13,7 @@ export interface NBAGame {
   score_away: number;
   quarter: number;
   time_remaining: string;
+  clock?: string; // Railway sends this field
   is_live: boolean;
 }
 
