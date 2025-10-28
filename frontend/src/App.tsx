@@ -20,9 +20,10 @@ const SchedulePage = lazy(() => import('./components/SchedulePage'));
 const TeamPage = lazy(() => import('./components/TeamPage'));
 const TeamsDirectory = lazy(() => import('./components/TeamsDirectory'));
 const GameDetailPage = lazy(() => import('./components/GameDetailPage'));
+const TradingDesk = lazy(() => import('./components/TradingDesk'));
 
 const App: Component = () => {
-  const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game'>('predictions');
+  const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game' | 'trading'>('predictions');
   const [selectedTeam, setSelectedTeam] = createSignal('');
   const [selectedGame, setSelectedGame] = createSignal('');
   const [initialLoading, setInitialLoading] = createSignal(true);
@@ -59,12 +60,14 @@ const App: Component = () => {
       setCurrentPage('stats');
     } else if (path === '/schedule') {
       setCurrentPage('schedule');
+    } else if (path === '/trading') {
+      setCurrentPage('trading');
     } else {
       setCurrentPage('predictions');
     }
   });
 
-  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game', id?: string) => {
+  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game' | 'trading', id?: string) => {
     if (page === 'game' && id) {
       window.history.pushState({}, '', `/game/${id}`);
       setSelectedGame(id);
@@ -82,6 +85,9 @@ const App: Component = () => {
     } else if (page === 'schedule') {
       window.history.pushState({}, '', '/schedule');
       setCurrentPage('schedule');
+    } else if (page === 'trading') {
+      window.history.pushState({}, '', '/trading');
+      setCurrentPage('trading');
     } else {
       window.history.pushState({}, '', '/');
       setCurrentPage('predictions');
@@ -153,6 +159,17 @@ const App: Component = () => {
                 <span class="hidden sm:inline">Teams</span>
                 <span class="sm:hidden">🏀</span>
               </button>
+              <button
+                onClick={() => navigate('trading')}
+                class={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  currentPage() === 'trading'
+                    ? 'bg-gradient-to-r from-yellow-600 to-orange-600 text-white shadow-lg shadow-yellow-500/30'
+                    : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
+                }`}
+              >
+                <span class="hidden sm:inline">Trading</span>
+                <span class="sm:hidden">💰</span>
+              </button>
             </div>
           </div>
         </div>
@@ -166,6 +183,7 @@ const App: Component = () => {
           {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
           {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
           {currentPage() === 'game' && selectedGame() && <GameDetailPage gameId={selectedGame()} />}
+          {currentPage() === 'trading' && <TradingDesk games={wsService.games()} backendUrl={import.meta.env.VITE_BACKEND_URL || 'https://ol24-production.up.railway.app'} />}
         </Suspense>
       </Show>
     </div>

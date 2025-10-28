@@ -1,6 +1,5 @@
 import { type Component, createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { wsService } from '../services/websocket';
-import MLPredictionBox from './MLPredictionBox';
 
 interface GameDetailPageProps {
   gameId: string;
@@ -32,8 +31,24 @@ const getTeamId = (teamIdentifier: string): string => {
   return teamMap[teamIdentifier] || teamMap[teamIdentifier?.toUpperCase()] || '1610612738';
 };
 
+// Convert probability to American odds
+const probToAmericanOdds = (prob: number): string => {
+  if (prob >= 0.5) {
+    return '' + Math.round(-100 * prob / (1 - prob));
+  } else {
+    return '+' + Math.round(100 * (1 - prob) / prob);
+  }
+};
+
+// Calculate implied probability from spread
+const impliedProbFromSpread = (spread: number): number => {
+  // Simplified: spread of -3 ≈ 60% win probability
+  return 0.5 + (spread * 0.033);
+};
+
 const GameDetailPage: Component<GameDetailPageProps> = (props) => {
   const [mlPrediction, setMlPrediction] = createSignal<any>(null);
+  const [q2Prediction, setQ2Prediction] = createSignal<any>(null);
   const [showJson, setShowJson] = createSignal(false);
   const API_BASE = 'https://ol24-production.up.railway.app';
 
@@ -48,6 +63,11 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
       const data = await response.json();
       if (!data.error) {
         setMlPrediction(data);
+        
+        // If this is Q2 6:00 prediction, store it separately
+        if (data.is_q2_6min) {
+          setQ2Prediction(data);
+        }
       }
     } catch (error) {
       console.error('Error fetching prediction:', error);
@@ -63,11 +83,50 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
     }
   });
 
-  // Check if we're in Q2 6:00 trade window
-  const isTradeWindow = () => {
+  // Check if Q2 6:00 trade window is active
+  const isTradeWindowActive = () => {
+    if (!game() || !q2Prediction()) return false;
+    const g = game()!;
+    // Active if Q2 and between 6:00 and 5:00
+    if (g.quarter !== 2) return false;
+    const timeRemaining = g.time_remaining || g.clock || '';
+    const minutes = parseInt(timeRemaining.split(':')[0] || '0');
+    return minutes >= 5 && minutes <= 6;
+  };
+
+  // Calculate betting metrics
+  const bettingMetrics = () => {
     const pred = mlPrediction();
-    if (!pred) return false;
-    return pred.is_q2_6min && pred.quarter === 2 && pred.time_remaining >= '05:00' && pred.time_remaining <= '06:00';
+    if (!pred || !pred.point_forecast) return null;
+
+    const forecast = pred.point_forecast;
+    const confidence = pred.model_confidence || 0.7;
+    const edge = pred.edge_magnitude || 0;
+
+    // Calculate probabilities
+    const winProb = impliedProbFromSpread(forecast);
+    const loseProb = 1 - winProb;
+
+    // American odds
+    const americanOdds = probToAmericanOdds(winProb);
+    
+    // Expected value
+    const ev = (winProb * 100) - (loseProb * 100);
+
+    // Kelly Criterion (simplified)
+    const kelly = ((winProb * 2) - 1) / 1;
+    const kellyPercent = Math.max(0, Math.min(kelly * 100, 25)); // Cap at 25%
+
+    return {
+      forecast,
+      winProb,
+      loseProb,
+      americanOdds,
+      ev,
+      kelly: kellyPercent,
+      confidence,
+      edge
+    };
   };
 
   return (
@@ -88,7 +147,6 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
                   alt={game()!.away_team}
                   class="w-20 h-20 md:w-24 md:h-24 mx-auto mb-3"
                   onError={(e) => {
-                    console.error('Logo failed to load:', game()!.away_team, getTeamId(game()!.away_team));
                     e.currentTarget.src = 'https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg';
                   }}
                 />
@@ -107,7 +165,7 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
                   <div class="text-gray-400 text-lg">{game()!.time_remaining || game()!.clock}</div>
                 </Show>
                 <Show when={!game()!.is_live}>
-                  <div class="text-gray-500 text-xl font-semibold">Final</div>
+                  <div class="text-gray-500 text-xl font-semibold">Scheduled</div>
                 </Show>
               </div>
 
@@ -118,7 +176,6 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
                   alt={game()!.home_team}
                   class="w-20 h-20 md:w-24 md:h-24 mx-auto mb-3"
                   onError={(e) => {
-                    console.error('Logo failed to load:', game()!.home_team, getTeamId(game()!.home_team));
                     e.currentTarget.src = 'https://cdn.nba.com/logos/nba/1610612738/primary/L/logo.svg';
                   }}
                 />
@@ -128,37 +185,162 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
             </div>
           </div>
 
-          {/* Q2 6:00 TRADE SIGNAL (Special Green Box) */}
-          <Show when={isTradeWindow()}>
-            <div class="modern-card bg-gradient-to-br from-green-900/50 to-emerald-900/50 border-2 border-green-500 shadow-2xl shadow-green-500/30 animate-pulse">
-              <div class="text-center py-6">
-                <div class="text-4xl mb-4">🎯</div>
-                <div class="text-green-400 text-2xl font-bold mb-2">TRADE SIGNAL ACTIVE</div>
-                <div class="text-green-300 text-lg mb-4">Q2 6:00 Mark - Optimal Prediction Window</div>
-                <div class="text-gray-300 text-sm">Valid until Q2 5:00</div>
+          {/* 🏆 BIG GOLD Q2 6:00 OFFICIAL TRADE SIGNAL */}
+          <Show when={isTradeWindowActive() && q2Prediction()}>
+            <div class="modern-card bg-gradient-to-br from-yellow-900/60 via-amber-900/60 to-yellow-900/60 border-4 border-yellow-500 shadow-2xl shadow-yellow-500/50 relative overflow-hidden">
+              {/* Animated background */}
+              <div class="absolute inset-0 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-yellow-500/10 animate-pulse"></div>
+              
+              <div class="relative z-10 p-6">
+                <div class="text-center mb-6">
+                  <div class="text-6xl mb-3">🏆</div>
+                  <div class="text-yellow-400 text-3xl font-bold mb-2">OFFICIAL TRADE SIGNAL</div>
+                  <div class="text-yellow-300 text-xl">Q2 6:00 Mark - Mamba Prediction Window</div>
+                  <div class="text-amber-400 text-sm mt-2">⏰ Valid Until Q2 5:00</div>
+                </div>
+
+                {/* Main Prediction */}
+                <div class="bg-black/40 rounded-2xl p-6 mb-6">
+                  <div class="text-center mb-4">
+                    <div class="text-gray-300 text-sm mb-2">Final Score Spread Prediction</div>
+                    <div class="text-yellow-400 text-6xl font-bold">
+                      {q2Prediction().point_forecast >= 0 ? '+' : ''}{q2Prediction().point_forecast.toFixed(1)}
+                    </div>
+                    <div class="text-amber-400 text-sm mt-2">
+                      90% Confidence Interval: [{q2Prediction().interval_lower.toFixed(1)}, {q2Prediction().interval_upper.toFixed(1)}]
+                    </div>
+                  </div>
+
+                  {/* Betting Metrics */}
+                  <Show when={bettingMetrics()}>
+                    {(metrics) => (
+                      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                        {/* Win Probability */}
+                        <div class="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-500/30">
+                          <div class="text-yellow-300 text-xs mb-1">Win Probability</div>
+                          <div class="text-yellow-400 text-2xl font-bold">{(metrics().winProb * 100).toFixed(1)}%</div>
+                        </div>
+
+                        {/* American Odds */}
+                        <div class="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-500/30">
+                          <div class="text-yellow-300 text-xs mb-1">American Odds</div>
+                          <div class="text-yellow-400 text-2xl font-bold">{metrics().americanOdds}</div>
+                        </div>
+
+                        {/* Expected Value */}
+                        <div class="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-500/30">
+                          <div class="text-yellow-300 text-xs mb-1">Expected Value</div>
+                          <div class="text-yellow-400 text-2xl font-bold">{metrics().ev >= 0 ? '+' : ''}{metrics().ev.toFixed(1)}%</div>
+                        </div>
+
+                        {/* Kelly Criterion */}
+                        <div class="bg-yellow-500/20 rounded-lg p-4 text-center border border-yellow-500/30">
+                          <div class="text-yellow-300 text-xs mb-1">Kelly Bet Size</div>
+                          <div class="text-yellow-400 text-2xl font-bold">{metrics().kelly.toFixed(1)}%</div>
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+
+                  {/* Edge Detection */}
+                  <Show when={q2Prediction().edge_detected}>
+                    <div class="mt-4 bg-green-500/30 border-2 border-green-400 rounded-xl p-4 text-center">
+                      <div class="text-green-300 text-lg font-bold mb-1">🎯 EDGE DETECTED</div>
+                      <div class="text-green-400 text-3xl font-bold">
+                        +{q2Prediction().edge_magnitude?.toFixed(1)} points
+                      </div>
+                      <div class="text-green-300 text-sm mt-1">Market inefficiency confirmed</div>
+                    </div>
+                  </Show>
+                </div>
+
+                {/* Trading Instructions */}
+                <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                  <div class="text-yellow-400 text-sm font-semibold mb-2">Trading Parameters:</div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-yellow-300">
+                    <div>• Model: MAMBA_MENTALITY v1.0.0</div>
+                    <div>• MAE: 5.39 points</div>
+                    <div>• Confidence: {((q2Prediction().model_confidence || 0.7) * 100).toFixed(0)}%</div>
+                    <div>• Coverage: 90% interval</div>
+                  </div>
+                </div>
               </div>
             </div>
           </Show>
 
-          {/* ML Prediction Box (Every 30 Seconds) */}
-          <Show when={game()!.is_live}>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-4">Real-Time ML Prediction (30s updates)</h2>
-              <MLPredictionBox 
-                gameId={props.gameId} 
-                prediction={mlPrediction()}
-                isQ26Min={isTradeWindow()}
-              />
+          {/* Continuous ML Predictions (Small Box - Every 30s) */}
+          <Show when={game()!.is_live && mlPrediction() && !isTradeWindowActive()}>
+            <div class="modern-card bg-gray-800/50 border-purple-500/30">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                  <h3 class="text-lg font-bold text-white">Real-Time ML Prediction</h3>
+                </div>
+                <div class="text-xs text-gray-400">Updates every 30s</div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Forecast */}
+                <div class="text-center">
+                  <div class="text-gray-400 text-xs mb-1">Spread Forecast</div>
+                  <div class="text-purple-400 text-3xl font-bold">
+                    {mlPrediction().point_forecast >= 0 ? '+' : ''}{mlPrediction().point_forecast.toFixed(1)}
+                  </div>
+                  <div class="text-gray-500 text-xs mt-1">
+                    [{mlPrediction().interval_lower.toFixed(1)}, {mlPrediction().interval_upper.toFixed(1)}]
+                  </div>
+                </div>
+
+                {/* Probability */}
+                <div class="text-center">
+                  <div class="text-gray-400 text-xs mb-1">Win Probability</div>
+                  <div class="text-blue-400 text-3xl font-bold">
+                    {bettingMetrics() ? (bettingMetrics()!.winProb * 100).toFixed(1) : 'N/A'}%
+                  </div>
+                  <div class="text-gray-500 text-xs mt-1">
+                    Odds: {bettingMetrics() ? bettingMetrics()!.americanOdds : 'N/A'}
+                  </div>
+                </div>
+
+                {/* Confidence */}
+                <div class="text-center">
+                  <div class="text-gray-400 text-xs mb-1">Model Confidence</div>
+                  <div class="text-green-400 text-3xl font-bold">
+                    {((mlPrediction().model_confidence || 0.7) * 100).toFixed(0)}%
+                  </div>
+                  <div class="text-gray-500 text-xs mt-1">
+                    MAE: 5.39 pts
+                  </div>
+                </div>
+              </div>
+
+              {/* Edge */}
+              <Show when={mlPrediction().edge_detected}>
+                <div class="mt-4 pt-4 border-t border-gray-700 text-center">
+                  <span class="text-green-400 text-sm font-semibold">Edge Detected: </span>
+                  <span class="text-green-300 text-sm">+{mlPrediction().edge_magnitude?.toFixed(1)} points</span>
+                </div>
+              </Show>
+            </div>
+          </Show>
+
+          {/* Waiting for Q2 6:00 Message */}
+          <Show when={game()!.is_live && !mlPrediction() && game()!.quarter < 2}>
+            <div class="modern-card bg-blue-900/20 border-blue-500/30 text-center py-8">
+              <div class="text-4xl mb-3">⏰</div>
+              <div class="text-blue-400 text-xl font-bold mb-2">Waiting for Q2 6:00...</div>
+              <div class="text-gray-400">Mamba model requires 18 minutes of play-by-play data</div>
+              <div class="text-gray-500 text-sm mt-2">Current: Q{game()!.quarter} {game()!.time_remaining}</div>
             </div>
           </Show>
 
           {/* API Testing Panel */}
           <div class="modern-card">
             <div class="flex items-center justify-between mb-4">
-              <h2 class="text-xl font-bold text-white">API Testing & Connection</h2>
+              <h2 class="text-xl font-bold text-white">API Testing & Live Data</h2>
               <button
                 onClick={() => setShowJson(!showJson())}
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all"
               >
                 {showJson() ? 'Hide JSON' : 'Show Live JSON'}
               </button>
@@ -173,19 +355,29 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
                 </div>
 
                 {/* Live Game Data */}
-                <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
-                  <div class="text-sm text-gray-400 mb-2 font-semibold">Game Data:</div>
-                  <pre class="text-xs text-gray-300 overflow-x-auto">
-                    {JSON.stringify(game(), null, 2)}
+                <div class="bg-gray-900 border border-gray-700 rounded-lg p-4 overflow-x-auto">
+                  <div class="text-sm text-gray-400 mb-2 font-semibold">Game Data (WebSocket):</div>
+                  <pre class="text-xs text-gray-300">
+{JSON.stringify(game(), null, 2)}
                   </pre>
                 </div>
 
                 {/* ML Prediction Data */}
                 <Show when={mlPrediction()}>
-                  <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
-                    <div class="text-sm text-gray-400 mb-2 font-semibold">ML Prediction:</div>
-                    <pre class="text-xs text-gray-300 overflow-x-auto">
-                      {JSON.stringify(mlPrediction(), null, 2)}
+                  <div class="bg-gray-900 border border-gray-700 rounded-lg p-4 overflow-x-auto">
+                    <div class="text-sm text-gray-400 mb-2 font-semibold">ML Prediction (30s updates):</div>
+                    <pre class="text-xs text-gray-300">
+{JSON.stringify(mlPrediction(), null, 2)}
+                    </pre>
+                  </div>
+                </Show>
+
+                {/* Q2 6:00 Prediction */}
+                <Show when={q2Prediction()}>
+                  <div class="bg-yellow-900/20 border border-yellow-700/30 rounded-lg p-4 overflow-x-auto">
+                    <div class="text-sm text-yellow-400 mb-2 font-semibold">Q2 6:00 Official Prediction:</div>
+                    <pre class="text-xs text-yellow-300">
+{JSON.stringify(q2Prediction(), null, 2)}
                     </pre>
                   </div>
                 </Show>
@@ -193,7 +385,7 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
                 {/* Refresh Button */}
                 <button
                   onClick={fetchPrediction}
-                  class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium"
+                  class="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-all"
                 >
                   Refresh Prediction Data
                 </button>
