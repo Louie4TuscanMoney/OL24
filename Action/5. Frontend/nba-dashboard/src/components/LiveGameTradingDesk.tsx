@@ -1,9 +1,12 @@
-import { Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
-import { Line } from 'solid-chartjs';
-import { Chart, Title, Tooltip, Legend, Colors } from 'chart.js';
+import { type Component, createSignal, onMount, onCleanup, For, Show } from 'solid-js';
+// import { Line } from 'solid-chartjs';
+// import { Chart, Title, Tooltip, Legend, Colors } from 'chart.js';
 
 // Register Chart.js components
-Chart.register(Title, Tooltip, Legend, Colors);
+// Chart.register(Title, Tooltip, Legend, Colors);
+
+// TODO: Add Chart.js after fixing build
+const Line: any = () => <div>Chart loading...</div>;
 
 interface GameScore {
   game_id: string;
@@ -29,11 +32,11 @@ interface Props {
 }
 
 const LiveGameTradingDesk: Component<Props> = (props) => {
-  const [game, setGame] = createSignal<GameScore | null>(null);
+  const [game] = createSignal<GameScore | null>(null);
   const [scoreHistory, setScoreHistory] = createSignal<{time: string, homeDiff: number}[]>([]);
   const [spreadLadder, setSpreadLadder] = createSignal<SpreadLevel[]>([]);
   
-  const API_BASE = 'https://ol24-production.up.railway.app';
+  // const API_BASE = 'https://ol24-production.up.railway.app';
 
   // Update every 1 second
   let interval: number;
@@ -41,7 +44,7 @@ const LiveGameTradingDesk: Component<Props> = (props) => {
   const fetchGameData = async () => {
     try {
       // Fetch live game data
-      const response = await fetch(`${API_BASE}/ws`); // Will need dedicated endpoint
+      // const response = await fetch(`${API_BASE}/ws`); // Will need dedicated endpoint
       // For now, using WebSocket data
       
       // Mock data for now - replace with real data

@@ -3,7 +3,7 @@
  * Displays single NBA game with ML prediction and betting edge
  */
 
-import { Component, Show } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import type { NBAGame, Prediction, Edge, BettingRecommendation } from '../types';
 import { formatClock } from '../utils/formatters';
 

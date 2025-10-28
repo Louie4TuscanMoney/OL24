@@ -3,7 +3,7 @@
  * Opens when user clicks on a prediction
  */
 
-import { Component, Show, For } from 'solid-js';
+import { type Component, Show, For } from 'solid-js';
 import type { EnhancedPrediction, ScorePattern } from '../types';
 
 interface Props {

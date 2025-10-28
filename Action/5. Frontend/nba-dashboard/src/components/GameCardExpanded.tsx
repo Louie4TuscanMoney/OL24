@@ -4,7 +4,7 @@
  * ENHANCED: Click to view ALL 33 Mamba features
  */
 
-import { Component, Show, createSignal } from 'solid-js';
+import { type Component, Show, createSignal } from 'solid-js';
 import type { NBAGame, EnhancedPrediction, Edge, BettingRecommendation, ScorePattern } from '../types';
 import PredictionChart from './PredictionChart';
 import RiskLayers from './RiskLayers';

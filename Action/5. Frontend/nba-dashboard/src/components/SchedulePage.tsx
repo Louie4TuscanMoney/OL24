@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, For, Show } from 'solid-js';
+import { type Component, createSignal, onMount, For, Show } from 'solid-js';
 
 interface ScheduledGame {
   game_id: string;

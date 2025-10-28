@@ -9,7 +9,7 @@
  * - Risk Management (5-layer system)
  */
 
-import { Component, For, Show, onMount, onCleanup, createSignal } from 'solid-js';
+import { type Component, For, Show, onMount, onCleanup, createSignal } from 'solid-js';
 import { wsService } from '../services/websocket';
 import GameCardExpanded from './GameCardExpanded';
 import SystemStatus from './SystemStatus';
@@ -50,7 +50,7 @@ const Dashboard: Component = () => {
     Array.from(edges().values()).filter(e => e.has_edge).length;
 
   return (
-    <div class="min-h-screen bg-gray-950 text-gray-100">
+    <div class="min-h-screen bg-gray-900 text-gray-100">
       {/* Header */}
       <header class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 py-4">
@@ -129,7 +129,7 @@ const Dashboard: Component = () => {
                     <GameCardExpanded
                       game={game}
                       pattern={patterns().get(game.game_id)}
-                      prediction={predictions().get(game.game_id)}
+                      prediction={predictions().get(game.game_id) as any}
                       edge={edges().get(game.game_id)}
                       recommendation={recommendations().get(game.game_id)}
                       onOpenTradingDesk={() => setTradingDeskGameId(game.game_id)}

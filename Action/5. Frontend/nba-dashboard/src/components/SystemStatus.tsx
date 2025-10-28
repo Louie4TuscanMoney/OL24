@@ -3,7 +3,7 @@
  * Shows status of all backend systems
  */
 
-import { Component, createSignal, onMount } from 'solid-js';
+import { type Component, createSignal } from 'solid-js';
 
 interface SystemHealth {
   nba_api: 'online' | 'offline';
@@ -13,16 +13,16 @@ interface SystemHealth {
 }
 
 const SystemStatus: Component = () => {
-  const [health, setHealth] = createSignal<SystemHealth>({
+  const [health] = createSignal<SystemHealth>({
     nba_api: 'offline',
     ml_model: 'offline',
     betonline: 'offline',
     risk_system: 'online' // Always online (local)
   });
 
-  const [bankroll, setBankroll] = createSignal(5000);
-  const [totalBets, setTotalBets] = createSignal(0);
-  const [winRate, setWinRate] = createSignal(0.62);
+  const [bankroll] = createSignal(5000);
+  const [totalBets] = createSignal(0);
+  const [winRate] = createSignal(0.62);
 
   const getStatusColor = (status: 'online' | 'offline') => 
     status === 'online' ? 'green' : 'red';

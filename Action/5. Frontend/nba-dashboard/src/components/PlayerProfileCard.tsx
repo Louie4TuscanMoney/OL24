@@ -11,7 +11,7 @@
  * - Last 10 games trend
  */
 
-import { Component, Show, For, createSignal, onMount } from 'solid-js';
+import { type Component, Show, For, createSignal, onMount } from 'solid-js';
 
 interface PlayerProfile {
   player_id: string;

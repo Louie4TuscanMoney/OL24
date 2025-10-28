@@ -3,7 +3,7 @@
  * Shows bet progression through all 5 risk layers
  */
 
-import { Component } from 'solid-js';
+import { type Component } from 'solid-js';
 import type { BettingRecommendation } from '../types';
 
 interface Props {
@@ -35,7 +35,7 @@ const RiskLayers: Component<Props> = (props) => {
 
       {/* Layer progression bars */}
       <div class="space-y-2">
-        {layers.map((layer, i) => (
+        {layers.map((layer) => (
           <div>
             <div class="flex justify-between text-xs mb-1">
               <span class="text-gray-400">{layer.name}</span>

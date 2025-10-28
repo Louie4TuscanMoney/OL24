@@ -1,20 +1,4 @@
-import { Component, createSignal, onMount, For, Show } from 'solid-js';
-
-interface PlayerStats {
-  player_id: string;
-  name: string;
-  position: string;
-  team_abbr: string;
-  team_name: string;
-  ppg: number;
-  rpg: number;
-  apg: number;
-  fg_pct: number;
-  ts_pct: number;
-  efg_pct: number;
-  pts_100: number;
-  gp: number;
-}
+import { type Component, createSignal, onMount, For, Show } from 'solid-js';
 
 interface TeamStats {
   team_id: string;
@@ -37,9 +21,9 @@ interface Injury {
 }
 
 const StatsPage: Component = () => {
-  const [topScorers, setTopScorers] = createSignal<PlayerStats[]>([]);
-  const [topRebounders, setTopRebounders] = createSignal<PlayerStats[]>([]);
-  const [topAssists, setTopAssists] = createSignal<PlayerStats[]>([]);
+  // const [topScorers, setTopScorers] = createSignal<PlayerStats[]>([]);
+  // const [topRebounders, setTopRebounders] = createSignal<PlayerStats[]>([]);
+  // const [topAssists, setTopAssists] = createSignal<PlayerStats[]>([]);
   const [teams, setTeams] = createSignal<TeamStats[]>([]);
   const [injuries, setInjuries] = createSignal<Injury[]>([]);
   const [loading, setLoading] = createSignal(true);

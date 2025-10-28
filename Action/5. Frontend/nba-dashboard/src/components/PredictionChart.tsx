@@ -3,7 +3,7 @@
  * Visualizes 18-minute score differential pattern + ML prediction
  */
 
-import { Component, For } from 'solid-js';
+import { type Component, For } from 'solid-js';
 import type { ScorePattern, Prediction } from '../types';
 
 interface Props {
