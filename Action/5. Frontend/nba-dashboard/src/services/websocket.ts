@@ -61,9 +61,87 @@ export class WebSocketService {
     }
   }
 
-  private handleMessage(message: WSMessage) {
+  private handleMessage(message: any) {
     this.lastUpdate[1](new Date());
 
+    // Handle Railway backend format (type: "update")
+    if (message.type === 'update') {
+      console.log('📦 Received update from Railway:', message);
+      
+      // Update all games
+      if (message.live_games) {
+        const gamesMap = new Map();
+        message.live_games.forEach((game: any) => {
+          gamesMap.set(game.game_id, game);
+        });
+        this.games[1](gamesMap);
+      }
+      
+      // Update predictions from opportunities
+      if (message.opportunities) {
+        const predsMap = new Map();
+        const patternsMap = new Map();
+        const edgesMap = new Map();
+        const recsMap = new Map();
+        
+        message.opportunities.forEach((opp: any) => {
+          const gameId = opp.game_id;
+          
+          // Extract prediction
+          if (opp.prediction) {
+            predsMap.set(gameId, {
+              point_forecast: opp.prediction,
+              interval_lower: opp.interval_lower || opp.prediction - 5,
+              interval_upper: opp.interval_upper || opp.prediction + 5,
+              coverage_probability: opp.p_win || 0.95,
+              timestamp: opp.timestamp,
+              mamba_features: opp.mamba_features,
+              features_extracted: opp.features_extracted || false
+            });
+          }
+          
+          // Extract pattern
+          if (opp.pattern) {
+            patternsMap.set(gameId, opp.pattern);
+          }
+          
+          // Extract edge
+          if (opp.edge !== undefined) {
+            edgesMap.set(gameId, {
+              has_edge: Math.abs(opp.edge) > 5,
+              edge_size: Math.abs(opp.edge),
+              direction: opp.edge > 0 ? 'home' : 'away',
+              confidence: Math.abs(opp.edge) <= 5 ? 'high' : Math.abs(opp.edge) <= 12 ? 'medium' : 'low',
+              ml_forecast: opp.prediction || 0,
+              market_spread: opp.market_spread || 0
+            });
+          }
+          
+          // Extract recommendation
+          if (opp.final_bet !== undefined) {
+            recsMap.set(gameId, {
+              final_bet: opp.final_bet,
+              kelly_bet: opp.kelly_bet || 0,
+              delta_bet: opp.delta_bet || 0,
+              portfolio_bet: opp.portfolio_bet || 0,
+              decision_tree_bet: opp.decision_tree_bet || 0,
+              should_bet: opp.should_bet || false,
+              bet_side: opp.bet_side || '',
+              confidence: opp.confidence || 0
+            });
+          }
+        });
+        
+        this.predictions[1](predsMap);
+        this.patterns[1](patternsMap);
+        this.edges[1](edgesMap);
+        this.recommendations[1](recsMap);
+      }
+      
+      return;
+    }
+
+    // Legacy format (for backwards compatibility)
     switch (message.type) {
       case 'score_update':
         this.updateGame(message.data);
