@@ -391,19 +391,13 @@ CREATE INDEX IF NOT EXISTS idx_standings_date ON standings_daily(snapshot_date D
 -- 10. HELPER FUNCTIONS
 -- ============================================================================
 
--- Prune old games (keep only last 10 per player)
-CREATE OR REPLACE FUNCTION prune_old_games() RETURNS void AS $$
+-- DON'T PRUNE! Keep ALL games for ML training
+-- Only prune games older than 3 years (for storage management)
+CREATE OR REPLACE FUNCTION prune_very_old_games() RETURNS void AS $$
 BEGIN
     DELETE FROM player_box_scores
-    WHERE (player_id, game_id) IN (
-        SELECT player_id, game_id
-        FROM (
-            SELECT player_id, game_id,
-                   ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY game_date DESC) AS rn
-            FROM player_box_scores
-        ) ranked
-        WHERE rn > 10
-    );
+    WHERE game_date < CURRENT_DATE - INTERVAL '3 years';
+    -- Keeps 3 seasons of data (246 games/season × 3 = 738 games per player)
 END;
 $$ LANGUAGE plpgsql;
 

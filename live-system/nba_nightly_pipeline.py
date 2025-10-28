@@ -428,11 +428,18 @@ class NBANightlyPipeline:
     
     def prune_and_refresh_last10(self):
         """
-        STEP 2: Keep only last 10 games, refresh materialized view
+        STEP 2: Refresh last10 view (DON'T delete games - keep for ML!)
         """
-        self.cursor.execute("SELECT prune_old_games()")
+        # DON'T PRUNE! Keep all games for future ML models
+        # Only refresh the materialized view for fast queries
         self.cursor.execute("SELECT refresh_last10()")
         self.conn.commit()
+        
+        # Optional: Prune games older than 3 years (once per month)
+        if datetime.now().day == 1:  # First of month
+            print("      🗑️  Pruning games >3 years old...")
+            self.cursor.execute("SELECT prune_very_old_games()")
+            self.conn.commit()
     
     def update_standings(self):
         """
