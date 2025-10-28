@@ -46,13 +46,20 @@ class NBALiveScores:
             'Accept-Language': 'en-US,en;q=0.9',
         }
         
-        # NO CACHE - DIRECT TO NBA API EVERY TIME!
-        # NO CACHING - Live betting requires INSTANT data!
-        self._last_fetch_time = None
-        self._cached_games = []
-        self._cache_duration = 0
+        # RATE LIMITING: Track API calls to prevent throttling
+        self._last_nba_api_call = 0
+        self._last_espn_api_call = 0
+        self._nba_api_cooldown = 1.0  # Wait 1 second between nba_api calls
+        self._espn_api_cooldown = 0.5  # Wait 0.5 seconds between ESPN calls
         
-        print(f"✅ NBA API initialized: REAL-TIME (no cache) - ESPN + nba_api + CDN fallback")
+        # Consecutive failures tracking
+        self._nba_api_failures = 0
+        self._max_failures = 3  # After 3 failures, skip for 30 seconds
+        self._failure_timeout = 30
+        self._nba_api_timeout_until = 0
+        
+        print(f"✅ NBA API initialized: REAL-TIME with rate limiting (1s cooldown)")
+        print(f"   Priority: nba_api (instant) → ESPN (10s) → CDN (5-10 min)")
         
     def get_todays_games(self) -> List[Dict]:
         """
@@ -63,47 +70,70 @@ class NBALiveScores:
             List of game dicts with current state
         """
         # NO CACHE - Fetch fresh data every time for live betting
-        now = datetime.now()
+        now = time.time()
         
         # METHOD 1: Use nba_api library FIRST (correct game IDs!)
         if NBA_API_AVAILABLE:
+            # Check if we're in timeout period due to repeated failures
+            if now < self._nba_api_timeout_until:
+                remaining = int(self._nba_api_timeout_until - now)
+                print(f"⚠️ nba_api in timeout ({remaining}s remaining), using fallback")
+            # Check rate limiting cooldown
+            elif (now - self._last_nba_api_call) < self._nba_api_cooldown:
+                print(f"⚡ Rate limit: Using cached/fallback (nba_api called {now - self._last_nba_api_call:.1f}s ago)")
+            else:
+                try:
+                    self._last_nba_api_call = now
+                    board = scoreboard.ScoreBoard()
+                    games_data = board.get_dict()
+                    
+                    games = []
+                    if games_data and 'scoreboard' in games_data and 'games' in games_data['scoreboard']:
+                        for game in games_data['scoreboard']['games']:
+                            parsed = self._parse_nba_api_game(game)
+                            if parsed:
+                                games.append(parsed)
+                    
+                    if games:
+                        print(f"✅ nba_api library: {len(games)} games (CORRECT GAME IDs!)")
+                        self._nba_api_failures = 0  # Reset failure counter on success
+                        return games
+                        
+                except Exception as e:
+                    self._nba_api_failures += 1
+                    print(f"⚠️ nba_api failed ({self._nba_api_failures}/{self._max_failures}): {e}")
+                    
+                    # If too many failures, put in timeout
+                    if self._nba_api_failures >= self._max_failures:
+                        self._nba_api_timeout_until = now + self._failure_timeout
+                        print(f"🚨 nba_api failing repeatedly! Timeout for {self._failure_timeout}s")
+                    
+                    print(f"   Trying ESPN...")
+        
+        # METHOD 2: ESPN API (FAST - 10 second updates!)
+        # Apply rate limiting
+        if (now - self._last_espn_api_call) >= self._espn_api_cooldown:
             try:
-                board = scoreboard.ScoreBoard()
-                games_data = board.get_dict()
+                self._last_espn_api_call = now
+                response = requests.get(self.scoreboard_url, headers=self.headers, timeout=3)
+                response.raise_for_status()
+                data = response.json()
                 
                 games = []
-                if games_data and 'scoreboard' in games_data and 'games' in games_data['scoreboard']:
-                    for game in games_data['scoreboard']['games']:
-                        parsed = self._parse_nba_api_game(game)
+                if 'events' in data:
+                    for event in data['events']:
+                        parsed = self._parse_espn_game(event)
                         if parsed:
                             games.append(parsed)
                 
                 if games:
-                    print(f"✅ nba_api library: {len(games)} games (CORRECT GAME IDs!)")
+                    print(f"✅ ESPN API: {len(games)} games (FAST!)")
                     return games
                     
             except Exception as e:
-                print(f"⚠️ nba_api failed: {e}, trying ESPN...")
-        
-        # METHOD 2: ESPN API (FAST - 10 second updates!)
-        try:
-            response = requests.get(self.scoreboard_url, headers=self.headers, timeout=3)
-            response.raise_for_status()
-            data = response.json()
-            
-            games = []
-            if 'events' in data:
-                for event in data['events']:
-                    parsed = self._parse_espn_game(event)
-                    if parsed:
-                        games.append(parsed)
-            
-            if games:
-                print(f"✅ ESPN API: {len(games)} games (FAST!)")
-                return games
-                
-        except Exception as e:
-            print(f"⚠️ ESPN failed: {e}, trying CDN...")
+                print(f"⚠️ ESPN failed: {e}, trying CDN...")
+        else:
+            print(f"⚡ ESPN rate limit: Skipping (called {now - self._last_espn_api_call:.1f}s ago)")
         
         # METHOD 3: Fallback to CDN (5-10 min delay - LAST RESORT!)
         try:
