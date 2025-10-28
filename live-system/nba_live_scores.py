@@ -67,16 +67,25 @@ class NBALiveScores:
         print(f"   Strategy: ESPN EVERY WebSocket call (1/sec) → Cache if failed → Fresh data always")
         print(f"   Cache: 5s max age, prioritizes live ESPN over stale CDN")
         
-    def get_todays_games(self) -> List[Dict]:
+    def get_todays_games(self, force_refresh: bool = False) -> List[Dict]:
         """
         Get today's games - USE NBA_API for correct game IDs!
         ESPN has wrong game IDs that don't work with play-by-play
+        
+        Args:
+            force_refresh: If True, bypass all caching and rate limits
         
         Returns:
             List of game dicts with current state
         """
         # NO CACHE - Fetch fresh data every time for live betting
         now = time.time()
+        
+        # 🚨 FORCE REFRESH: Bypass cache completely
+        if force_refresh:
+            print(f"🔥 FORCE REFRESH: Bypassing all caching and rate limits")
+            self._last_espn_api_call = 0  # Reset to force ESPN call
+            self._last_nba_api_call = 0
         
         # METHOD 1: Use nba_api library FIRST (correct game IDs!)
         if NBA_API_AVAILABLE:

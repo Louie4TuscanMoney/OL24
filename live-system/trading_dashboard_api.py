@@ -1114,8 +1114,9 @@ async def build_complete_message() -> dict:
     """
     try:
         # Get live games (FAST - every call)
+        # 🔥 FORCE REFRESH: Bypass all caching to ensure real-time data
         if nba_api:
-            all_games = nba_api.get_todays_games()
+            all_games = nba_api.get_todays_games(force_refresh=True)
             # FILTER: Only show LIVE games OR today's games (not yesterday's finals!)
             from datetime import date
             today_str = date.today().strftime('%Y-%m-%d')
