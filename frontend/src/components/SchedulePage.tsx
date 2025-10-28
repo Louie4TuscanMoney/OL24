@@ -1,4 +1,5 @@
 import { type Component, createSignal, onMount, For, Show } from 'solid-js';
+import ScheduleGameModal from './ScheduleGameModal';
 
 interface ScheduledGame {
   game_id: string;
@@ -29,6 +30,7 @@ const SchedulePage: Component = () => {
   const [loading, setLoading] = createSignal(true);
   const [selectedTeam, setSelectedTeam] = createSignal<string>('');
   const [viewMode, setViewMode] = createSignal<'upcoming' | 'today' | 'week' | 'month'>('upcoming');
+  const [selectedGame, setSelectedGame] = createSignal<ScheduledGame | null>(null);
 
   const API_BASE = 'https://ol24-production.up.railway.app';
 
@@ -201,7 +203,10 @@ const SchedulePage: Component = () => {
                 <div class="space-y-4">
                   <For each={gamesOnDate}>
                     {(game) => (
-                      <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-blue-500 transition-all">
+                      <div 
+                        onClick={() => setSelectedGame(game)}
+                        class="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-purple-500 transition-all cursor-pointer hover:scale-[1.02] transform hover:shadow-xl"
+                      >
                         <div class="flex items-center justify-between">
                           {/* Away Team */}
                           <div class="flex items-center gap-3 flex-1">
@@ -257,6 +262,11 @@ const SchedulePage: Component = () => {
                         <div class="text-center text-gray-500 text-sm mt-3 pt-3 border-t border-gray-700">
                           📍 {game.arena}
                         </div>
+
+                        {/* Click Indicator */}
+                        <div class="text-center mt-3 text-purple-400 text-xs font-semibold">
+                          Click to view projected lineups & matchup details →
+                        </div>
                       </div>
                     )}
                   </For>
@@ -270,6 +280,14 @@ const SchedulePage: Component = () => {
               No games scheduled for this period
             </div>
           </Show>
+        </Show>
+
+        {/* Game Details Modal */}
+        <Show when={selectedGame()}>
+          <ScheduleGameModal
+            game={selectedGame()!}
+            onClose={() => setSelectedGame(null)}
+          />
         </Show>
       </div>
     </div>

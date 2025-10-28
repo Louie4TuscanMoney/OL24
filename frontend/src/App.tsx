@@ -16,6 +16,7 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const StatsPage = lazy(() => import('./components/StatsPage'));
 const SchedulePage = lazy(() => import('./components/SchedulePage'));
 const TeamPage = lazy(() => import('./components/TeamPage'));
+const TeamsDirectory = lazy(() => import('./components/TeamsDirectory'));
 
 const LoadingSpinner = () => (
   <div class="flex items-center justify-center min-h-screen">
@@ -24,8 +25,8 @@ const LoadingSpinner = () => (
 );
 
 const App: Component = () => {
-  const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'team'>('predictions');
-  const [selectedTeam, setSelectedTeam] = createSignal('LAL');
+  const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team'>('predictions');
+  const [selectedTeam, setSelectedTeam] = createSignal('');
 
   // Handle URL-based routing
   createEffect(() => {
@@ -34,6 +35,8 @@ const App: Component = () => {
       const teamAbbr = path.split('/')[2];
       setSelectedTeam(teamAbbr);
       setCurrentPage('team');
+    } else if (path === '/teams') {
+      setCurrentPage('teams');
     } else if (path === '/stats') {
       setCurrentPage('stats');
     } else if (path === '/schedule') {
@@ -43,18 +46,24 @@ const App: Component = () => {
     }
   });
 
-  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'team', team?: string) => {
+  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'teams' | 'team', team?: string) => {
     if (page === 'team' && team) {
       window.history.pushState({}, '', `/team/${team}`);
       setSelectedTeam(team);
+      setCurrentPage('team');
+    } else if (page === 'teams') {
+      window.history.pushState({}, '', '/teams');
+      setCurrentPage('teams');
     } else if (page === 'stats') {
       window.history.pushState({}, '', '/stats');
+      setCurrentPage('stats');
     } else if (page === 'schedule') {
       window.history.pushState({}, '', '/schedule');
+      setCurrentPage('schedule');
     } else {
       window.history.pushState({}, '', '/');
+      setCurrentPage('predictions');
     }
-    setCurrentPage(page);
   };
 
   return (
@@ -99,9 +108,9 @@ const App: Component = () => {
                 📅 Schedule
               </button>
               <button
-                onClick={() => navigate('team', 'LAL')}
+                onClick={() => navigate('teams')}
                 class={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                  currentPage() === 'team'
+                  currentPage() === 'teams' || currentPage() === 'team'
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
@@ -118,7 +127,8 @@ const App: Component = () => {
         {currentPage() === 'predictions' && <Dashboard />}
         {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
         {currentPage() === 'schedule' && <SchedulePage />}
-        {currentPage() === 'team' && <TeamPage teamAbbr={selectedTeam()} />}
+        {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
+        {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
       </Suspense>
     </div>
   );
