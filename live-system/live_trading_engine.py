@@ -75,45 +75,57 @@ class LiveTradingEngine:
         
         self.mae = mae
         
-        # Load ML model (try multiple paths + auto-download)
+        # Load ML model - FORCE DOWNLOAD FROM GOOGLE DRIVE
         if model_path is None:
-            # RAILWAY FIX: Use /tmp for persistent storage during session
-            # Railway's root filesystem is ephemeral - /tmp persists during runtime
             railway_model_path = "/tmp/MAMBA_MENTALITY_SYSTEM.pkl"
             
-            # Try multiple possible locations
-            possible_paths = [
-                railway_model_path,  # Railway /tmp (persists during runtime)
-                "MAMBA_MENTALITY_SYSTEM.pkl",  # Current directory
-                "../mambaofficial/models/MAMBA_MENTALITY_SYSTEM.pkl",  # Local dev
-                "../Action/HYBRID_ULTIMATE_V2_CLEAN.pkl",  # Old path
-                "models/MAMBA_MENTALITY_SYSTEM.pkl",  # Alternative
-            ]
+            print("="*80)
+            print("🔍 CHECKING FOR MAMBA MODEL")
+            print("="*80)
             
-            for path in possible_paths:
-                if os.path.exists(path):
-                    model_path = path
-                    print(f"✅ Found model at: {path}")
-                    break
+            # Check if model exists AND is valid size
+            model_exists = False
+            if os.path.exists(railway_model_path):
+                size_mb = os.path.getsize(railway_model_path) / (1024 * 1024)
+                print(f"📁 Found existing file at {railway_model_path}")
+                print(f"   Size: {size_mb:.1f} MB")
+                
+                # Valid model should be at least 1MB
+                if size_mb >= 1.0:
+                    model_exists = True
+                    model_path = railway_model_path
+                    print("✅ Model file looks valid (>1MB)")
+                else:
+                    print("⚠️ Model file too small, probably corrupted")
+                    print("🗑️ Deleting corrupted file...")
+                    os.remove(railway_model_path)
             
-            # If still not found, download from Google Drive to /tmp
-            if model_path is None:
-                print("⬇️ Model not found locally, attempting Google Drive download...")
-                print(f"   Downloading to: {railway_model_path}")
+            # Download if not exists or was corrupted
+            if not model_exists:
+                print("\n📦 MODEL NOT FOUND OR CORRUPTED - DOWNLOADING FROM GOOGLE DRIVE")
+                print(f"   Target: {railway_model_path}")
+                print()
+                
                 try:
                     from download_mamba_model import download_mamba_model
                     
-                    # Download to /tmp on Railway (persists during runtime)
+                    # FORCE DOWNLOAD
                     if download_mamba_model(output_path=railway_model_path):
                         model_path = railway_model_path
-                        print(f"✅ Model downloaded successfully to {railway_model_path}!")
-                        print(f"   (Will persist for this session, re-download on next deploy)")
+                        print(f"\n✅ Model downloaded successfully to {railway_model_path}!")
                     else:
-                        print("❌ Model download failed")
+                        print("\n❌ MODEL DOWNLOAD FAILED - SYSTEM WILL NOT WORK!")
+                        model_path = None
+                except ImportError as e:
+                    print(f"❌ Cannot import download_mamba_model: {e}")
+                    model_path = None
                 except Exception as e:
                     print(f"❌ Download error: {e}")
                     import traceback
                     traceback.print_exc()
+                    model_path = None
+            
+            print("="*80)
         
         if model_path and os.path.exists(model_path):
             print(f"📂 Loading model: {model_path}")
