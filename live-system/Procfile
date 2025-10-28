@@ -2,4 +2,4 @@
 # Defines what processes to run
 
 web: uvicorn trading_dashboard_api:app --host 0.0.0.0 --port $PORT
-worker: python nba_stats_collector_v2_COMPREHENSIVE.py
+worker: python nba_nightly_pipeline.py
