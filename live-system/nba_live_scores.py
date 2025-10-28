@@ -47,9 +47,10 @@ class NBALiveScores:
         }
         
         # NO CACHE - DIRECT TO ESPN EVERY TIME!
+        # NO CACHING - Live betting requires INSTANT data!
         self._last_fetch_time = None
         self._cached_games = []
-        self._cache_duration = 0  # NO CACHE! Live betting requires INSTANT data!
+        self._cache_duration = 0
         
         print(f"✅ NBA API initialized: ESPN (10s updates) + nba_api (30s) + CDN (fallback)")
         
@@ -61,12 +62,8 @@ class NBALiveScores:
         Returns:
             List of game dicts with current state
         """
-        # Check cache first (10-second optimization)
+        # NO CACHE - Fetch fresh data every time for live betting
         now = datetime.now()
-        if self._last_fetch_time and self._cached_games:
-            time_since_fetch = (now - self._last_fetch_time).total_seconds()
-            if time_since_fetch < self._cache_duration:
-                return self._cached_games
         
         # METHOD 1: Use nba_api library FIRST (correct game IDs!)
         if NBA_API_AVAILABLE:
@@ -83,9 +80,6 @@ class NBALiveScores:
                 
                 if games:
                     print(f"✅ nba_api library: {len(games)} games (CORRECT GAME IDs!)")
-                    # Cache the results
-                    self._last_fetch_time = now
-                    self._cached_games = games
                     return games
                     
             except Exception as e:
@@ -93,7 +87,7 @@ class NBALiveScores:
         
         # METHOD 3: Fallback to CDN (cached but reliable)
         try:
-            response = requests.get(self.scoreboard_url_cdn, headers=self.headers, timeout=10)
+            response = requests.get(self.scoreboard_url_cdn, headers=self.headers, timeout=3)
             response.raise_for_status()
             data = response.json()
             

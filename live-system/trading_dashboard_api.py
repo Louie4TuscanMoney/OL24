@@ -98,7 +98,7 @@ active_connections: List[WebSocket] = []
 _prediction_cache = {
     'data': None,
     'timestamp': None,
-    'ttl_seconds': 10  # Cache for 10 seconds
+    'ttl_seconds': 3  # Cache for 3 seconds (fast updates!)
 }
 
 
@@ -1004,8 +1004,8 @@ async def websocket_endpoint(websocket: WebSocket):
             # Send to frontend
             await websocket.send_json(message)
             
-            # Update every 10 seconds (less aggressive than 3s polling!)
-            await asyncio.sleep(10)
+            # Update every 3 seconds for real-time scores
+            await asyncio.sleep(3)
             
     except WebSocketDisconnect:
         active_connections.remove(websocket)
