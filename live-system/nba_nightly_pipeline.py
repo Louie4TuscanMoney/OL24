@@ -73,13 +73,10 @@ class NBANightlyPipeline:
             self.compute_team_metrics()
             print(f"   ✅ Team stats updated\n")
             
-            # STEP 5: (Sunday) Run RAPM → update LEBRON
-            if datetime.now().weekday() == 6:  # Sunday
-                print("🧠 [5/5] Computing RAPM + LEBRON (weekly)...")
-                self.compute_rapm_and_lebron()
-                print(f"   ✅ RAPM + LEBRON updated\n")
-            else:
-                print("⏭️  [5/5] Skipping RAPM (only runs Sunday)\n")
+            # STEP 5: Run RAPM → update LEBRON (DAILY!)
+            print("🧠 [5/5] Computing RAPM + LEBRON (daily)...")
+            self.compute_rapm_and_lebron()
+            print(f"   ✅ RAPM + LEBRON updated\n")
             
             # Update standings
             print("🏆 Updating standings...")
