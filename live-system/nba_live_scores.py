@@ -46,13 +46,13 @@ class NBALiveScores:
             'Accept-Language': 'en-US,en;q=0.9',
         }
         
-        # NO CACHE - DIRECT TO ESPN EVERY TIME!
+        # NO CACHE - DIRECT TO NBA API EVERY TIME!
         # NO CACHING - Live betting requires INSTANT data!
         self._last_fetch_time = None
         self._cached_games = []
         self._cache_duration = 0
         
-        print(f"✅ NBA API initialized: ESPN (10s updates) + nba_api (30s) + CDN (fallback)")
+        print(f"✅ NBA API initialized: REAL-TIME (no cache) - ESPN + nba_api + CDN fallback")
         
     def get_todays_games(self) -> List[Dict]:
         """
