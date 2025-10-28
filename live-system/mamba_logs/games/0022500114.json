@@ -1,0 +1,153 @@
+{
+  "game_id": "0022500114",
+  "predictions": [
+    {
+      "timestamp": "2025-10-27T17:20:19.596256",
+      "date": "2025-10-27",
+      "time": "17:20:19",
+      "game_id": "0022500114",
+      "game_data": {
+        "home_team": "PHI",
+        "away_team": "ORL",
+        "home_score": 62,
+        "away_score": 51,
+        "period": 2,
+        "clock": "PT02M39.00S",
+        "current_diff": 11,
+        "game_status": null
+      },
+      "prediction": {
+        "mamba_prediction": 14.603560839462428,
+        "spread_line": 4.4,
+        "edge": 10.203560839462428,
+        "prediction_type": "live_q2_6min"
+      },
+      "odds": {
+        "spread": 4.4,
+        "total": 226.0,
+        "home_ml": 110,
+        "away_ml": -130,
+        "home_implied_prob": 0.4762,
+        "away_implied_prob": 0.5652,
+        "vig_percentage": 4.14,
+        "source": "BetOnline (REAL ODDS - FIXED!)"
+      },
+      "features": [
+        6.94444465637207,
+        4.364913463592529,
+        0.7089783549308777,
+        3.1764705181121826,
+        0.7058823704719543,
+        -0.0555555559694767,
+        9.0,
+        3.0,
+        15.0,
+        0.0,
+        21798.001953125,
+        0.09889733791351318,
+        0.03865049406886101,
+        0.14564327895641327,
+        0.0,
+        1.2593395709991455,
+        0.7183303236961365,
+        0.4564213752746582,
+        0.5116661787033081,
+        -20.0,
+        -20.0,
+        -5.0,
+        17.14642906188965,
+        -10.5,
+        0.08160675317049026,
+        12.0,
+        0.0,
+        3.8171961307525635,
+        1.0,
+        0.0,
+        2.0,
+        0.5,
+        0.5
+      ],
+      "metadata": {
+        "model_loaded": true,
+        "ontorisk_enabled": true
+      },
+      "outcome": null,
+      "accuracy": null,
+      "profit_loss": null
+    },
+    {
+      "timestamp": "2025-10-27T17:23:20.796756",
+      "date": "2025-10-27",
+      "time": "17:23:20",
+      "game_id": "0022500114",
+      "game_data": {
+        "home_team": "PHI",
+        "away_team": "ORL",
+        "home_score": 72,
+        "away_score": 60,
+        "period": 2,
+        "clock": "PT00M00.00S",
+        "current_diff": 12,
+        "game_status": null
+      },
+      "prediction": {
+        "mamba_prediction": 10.252304557127658,
+        "spread_line": 4.8,
+        "edge": 5.4523045571276585,
+        "prediction_type": "live_q2_6min"
+      },
+      "odds": {
+        "spread": 4.8,
+        "total": 264.0,
+        "home_ml": 110,
+        "away_ml": -130,
+        "home_implied_prob": 0.4762,
+        "away_implied_prob": 0.5652,
+        "vig_percentage": 4.14,
+        "source": "BetOnline (REAL ODDS - FIXED!)"
+      },
+      "features": [
+        6.94444465637207,
+        4.364913463592529,
+        0.7089783549308777,
+        3.1764705181121826,
+        0.7058823704719543,
+        -0.0555555559694767,
+        9.0,
+        3.0,
+        15.0,
+        0.0,
+        21798.001953125,
+        0.09889733791351318,
+        0.03865049406886101,
+        0.14564327895641327,
+        0.0,
+        1.2593395709991455,
+        0.7183303236961365,
+        0.4564213752746582,
+        0.5116661787033081,
+        -20.0,
+        -20.0,
+        -5.0,
+        17.14642906188965,
+        -10.5,
+        0.08160675317049026,
+        12.0,
+        0.0,
+        3.8171961307525635,
+        1.0,
+        0.0,
+        2.0,
+        0.5,
+        0.5
+      ],
+      "metadata": {
+        "model_loaded": true,
+        "ontorisk_enabled": true
+      },
+      "outcome": null,
+      "accuracy": null,
+      "profit_loss": null
+    }
+  ]
+}

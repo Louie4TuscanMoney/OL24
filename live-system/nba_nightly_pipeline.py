@@ -16,7 +16,6 @@ try:
     from nba_api.stats.endpoints import (
         leaguegamelog,
         boxscoretraditionalv2,
-        boxscoreadvancedv2,
         leaguestandingsv3
     )
     from nba_api.stats.static import players as nba_players
@@ -41,6 +40,30 @@ class NBANightlyPipeline:
         self.current_season = '2024-25'
         self.start_time = None
         print(f"✅ Connected to PostgreSQL")
+    
+    @staticmethod
+    def parse_minutes(min_str):
+        """Convert 'MM:SS' to decimal minutes"""
+        if not min_str or min_str == '' or min_str is None:
+            return 0.0
+        try:
+            if ':' in str(min_str):
+                parts = str(min_str).split(':')
+                return float(parts[0]) + float(parts[1]) / 60.0
+            else:
+                return float(min_str)
+        except:
+            return 0.0
+    
+    @staticmethod
+    def safe_int(val):
+        """Safely convert to int, handling None/NaN"""
+        if val is None or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+            return 0
+        try:
+            return int(val)
+        except:
+            return 0
     
     def run(self):
         """
@@ -111,50 +134,73 @@ class NBANightlyPipeline:
         if not NBA_API_AVAILABLE:
             return 0
         
-        # Get today's games
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
-        today = datetime.now().strftime('%m/%d/%Y')
+        # Get date range (allow override for historical data)
+        date_from = os.environ.get('FORCE_DATE_FROM')
+        date_to = os.environ.get('FORCE_DATE_TO')
         
+        if not date_from or not date_to:
+            # Default: yesterday and today
+            yesterday = (datetime.now() - timedelta(days=1)).strftime('%m/%d/%Y')
+            today = datetime.now().strftime('%m/%d/%Y')
+            date_from = yesterday
+            date_to = today
+        
+        print(f"      Fetching games from {date_from} to {date_to}...")
         time.sleep(0.6)
         games_df = leaguegamelog.LeagueGameLog(
             season=self.current_season,
             season_type_all_star='Regular Season',
-            date_from_nullable=yesterday,
-            date_to_nullable=today
+            date_from_nullable=date_from,
+            date_to_nullable=date_to
         ).get_data_frames()[0]
         
-        # Get unique game IDs
+        # Get unique game IDs + dates
         game_ids = games_df['GAME_ID'].unique()
+        game_dates = {}  # Map game_id → game_date
+        for _, row in games_df.iterrows():
+            game_dates[row['GAME_ID']] = row['GAME_DATE']
         
         games_count = 0
         for game_id in game_ids:
             try:
                 time.sleep(0.6)  # Rate limiting
+                game_date = game_dates.get(game_id)
                 
-                # Get traditional box score
-                trad_box = boxscoretraditionalv2.BoxScoreTraditionalV2(
+                # Get traditional box score (returns 3 dataframes: player, team, starter_bench)
+                trad_dfs = boxscoretraditionalv2.BoxScoreTraditionalV2(
                     game_id=game_id
-                ).get_data_frames()[0]  # Player stats
+                ).get_data_frames()
                 
-                # Get advanced box score (for team possessions)
-                adv_box = boxscoreadvancedv2.BoxScoreAdvancedV2(
-                    game_id=game_id
-                ).get_data_frames()[0]  # Team stats
+                player_box = trad_dfs[0]  # Player stats
+                team_box = trad_dfs[1]    # Team totals
                 
-                # Extract team possessions
+                # Calculate team possessions ourselves (BoxScoreAdvancedV2 is broken!)
+                # Formula: Poss ≈ FGA + 0.44×FTA - OREB + TO
                 team_poss = {}
-                for _, row in adv_box.iterrows():
+                all_teams = []
+                for _, row in team_box.iterrows():
                     team_id = str(row['TEAM_ID'])
-                    team_poss[team_id] = row.get('POSS', 0)
+                    all_teams.append(team_id)
+                    poss = row['FGA'] + 0.44 * row['FTA'] - row['OREB'] + row['TO']
+                    team_poss[team_id] = poss
                 
                 # Insert player box scores
-                for _, row in trad_box.iterrows():
+                for _, row in player_box.iterrows():
                     player_id = str(row['PLAYER_ID'])
                     team_id = str(row['TEAM_ID'])
+                    player_name = row.get('PLAYER_NAME', 'Unknown')
                     
-                    # Get opponent team_id (from game)
-                    game_teams = adv_box['TEAM_ID'].unique()
-                    opponent_id = [str(t) for t in game_teams if str(t) != team_id][0] if len(game_teams) == 2 else None
+                    # Auto-create player if doesn't exist
+                    self.cursor.execute("""
+                        INSERT INTO players (player_id, name, team_id, is_active)
+                        VALUES (%s, %s, %s, TRUE)
+                        ON CONFLICT (player_id) DO UPDATE SET
+                            team_id = EXCLUDED.team_id,
+                            updated_at = NOW()
+                    """, (player_id, player_name, team_id))
+                    
+                    # Get opponent team_id
+                    opponent_id = [t for t in all_teams if t != team_id][0] if len(all_teams) == 2 else None
                     
                     self.cursor.execute("""
                         INSERT INTO player_box_scores (
@@ -163,15 +209,16 @@ class NBANightlyPipeline:
                             oreb, dreb, reb, ast, stl, blk, tov, pf, plus_minus,
                             team_poss
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (player_id, game_id) DO UPDATE SET
+                        ON CONFLICT (player_id, game_id, game_date) DO UPDATE SET
                             pts = EXCLUDED.pts,
                             team_poss = EXCLUDED.team_poss
                     """, (
-                        player_id, game_id, row['GAME_DATE'], self.current_season, team_id, opponent_id,
-                        row.get('MIN', 0), row['PTS'], row['FGM'], row['FGA'], 
-                        row['FG3M'], row['FG3A'], row['FTM'], row['FTA'],
-                        row['OREB'], row['DREB'], row['REB'], row['AST'], 
-                        row['STL'], row['BLK'], row['TOV'], row['PF'], row['PLUS_MINUS'],
+                        player_id, game_id, game_date, self.current_season, team_id, opponent_id,
+                        self.parse_minutes(row.get('MIN', 0)), 
+                        self.safe_int(row.get('PTS')), self.safe_int(row.get('FGM')), self.safe_int(row.get('FGA')), 
+                        self.safe_int(row.get('FG3M')), self.safe_int(row.get('FG3A')), self.safe_int(row.get('FTM')), self.safe_int(row.get('FTA')),
+                        self.safe_int(row.get('OREB')), self.safe_int(row.get('DREB')), self.safe_int(row.get('REB')), self.safe_int(row.get('AST')), 
+                        self.safe_int(row.get('STL')), self.safe_int(row.get('BLK')), self.safe_int(row.get('TO')), self.safe_int(row.get('PF')), self.safe_int(row.get('PLUS_MINUS')),
                         team_poss.get(team_id, 0)
                     ))
                 
@@ -416,7 +463,7 @@ class NBANightlyPipeline:
                             lebron_offense = %s,
                             lebron_defense = %s
                         WHERE player_id = %s AND season_id = %s
-                    """, (rapm_off, rapm_def, lebron_off, lebron_def, player_id, self.current_season))
+                    """, (float(rapm_off), float(rapm_def), float(lebron_off), float(lebron_def), player_id, self.current_season))
                     
                     count += 1
             
