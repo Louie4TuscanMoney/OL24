@@ -19,24 +19,37 @@ const StatsPage = lazy(() => import('./components/StatsPage'));
 const SchedulePage = lazy(() => import('./components/SchedulePage'));
 const TeamPage = lazy(() => import('./components/TeamPage'));
 const TeamsDirectory = lazy(() => import('./components/TeamsDirectory'));
+const GameDetailPage = lazy(() => import('./components/GameDetailPage'));
 
 const App: Component = () => {
-  const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team'>('predictions');
+  const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game'>('predictions');
   const [selectedTeam, setSelectedTeam] = createSignal('');
+  const [selectedGame, setSelectedGame] = createSignal('');
   const [initialLoading, setInitialLoading] = createSignal(true);
   const [connected] = wsService.connected;
 
-  // Hide loading screen after connection OR after 3 seconds (for non-live pages)
+  // Hide loading screen after connection OR after 3 seconds max
   createEffect(() => {
     if (connected() || currentPage() !== 'predictions') {
       setTimeout(() => setInitialLoading(false), 500); // Small delay for smooth transition
     }
+    
+    // FAILSAFE: Always hide loading after 3 seconds, even if not connected
+    const timeout = setTimeout(() => {
+      setInitialLoading(false);
+    }, 3000);
+    
+    return () => clearTimeout(timeout);
   });
 
   // Handle URL-based routing
   createEffect(() => {
     const path = window.location.pathname;
-    if (path.startsWith('/team/')) {
+    if (path.startsWith('/game/')) {
+      const gameId = path.split('/')[2];
+      setSelectedGame(gameId);
+      setCurrentPage('game');
+    } else if (path.startsWith('/team/')) {
       const teamAbbr = path.split('/')[2];
       setSelectedTeam(teamAbbr);
       setCurrentPage('team');
@@ -51,10 +64,14 @@ const App: Component = () => {
     }
   });
 
-  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'teams' | 'team', team?: string) => {
-    if (page === 'team' && team) {
-      window.history.pushState({}, '', `/team/${team}`);
-      setSelectedTeam(team);
+  const navigate = (page: 'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game', id?: string) => {
+    if (page === 'game' && id) {
+      window.history.pushState({}, '', `/game/${id}`);
+      setSelectedGame(id);
+      setCurrentPage('game');
+    } else if (page === 'team' && id) {
+      window.history.pushState({}, '', `/team/${id}`);
+      setSelectedTeam(id);
       setCurrentPage('team');
     } else if (page === 'teams') {
       window.history.pushState({}, '', '/teams');
@@ -73,61 +90,68 @@ const App: Component = () => {
 
   return (
     <div>
-      {/* Loading Screen (shows on initial load for Predictions page) */}
-      <Show when={initialLoading() && currentPage() === 'predictions'}>
+      {/* Loading Screen (shows on initial load) */}
+      <Show when={initialLoading()}>
         <LoadingScreen message="Connecting to NBA Live API..." />
       </Show>
 
-      {/* Main App (hidden during initial loading) */}
-      <Show when={!initialLoading() || currentPage() !== 'predictions'}>
-        {/* Navigation Bar */}
-        <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4">
+      {/* Main App (shows after loading or immediately for non-predictions pages) */}
+      <Show when={!initialLoading()}>
+        {/* Modern Navigation Bar */}
+        <nav class="bg-black/50 border-b border-gray-800/50 sticky top-0 z-50 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex items-center justify-between h-16">
-            <div class="flex items-center gap-2">
-              <span class="text-2xl">🎯</span>
-              <h1 class="text-white text-xl font-bold">Ontologic XYZ</h1>
+            {/* Logo */}
+            <div class="flex items-center gap-3">
+              <div class="text-2xl">🎯</div>
+              <h1 class="text-white text-xl font-bold tracking-tight hidden sm:block">Ontologic XYZ</h1>
             </div>
+            
+            {/* Navigation Tabs */}
             <div class="flex gap-2">
               <button
                 onClick={() => navigate('predictions')}
-                class={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                class={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   currentPage() === 'predictions'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                    : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
                 }`}
               >
-                🔮 Live Predictions
+                <span class="hidden sm:inline">Live</span>
+                <span class="sm:hidden">🔮</span>
               </button>
               <button
                 onClick={() => navigate('stats')}
-                class={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                class={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   currentPage() === 'stats'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                    : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
                 }`}
               >
-                📊 Stats & Injuries
+                <span class="hidden sm:inline">Stats</span>
+                <span class="sm:hidden">📊</span>
               </button>
               <button
                 onClick={() => navigate('schedule')}
-                class={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                class={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   currentPage() === 'schedule'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                    : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
                 }`}
               >
-                📅 Schedule
+                <span class="hidden sm:inline">Schedule</span>
+                <span class="sm:hidden">📅</span>
               </button>
               <button
                 onClick={() => navigate('teams')}
-                class={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                class={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
                   currentPage() === 'teams' || currentPage() === 'team'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
+                    : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-white'
                 }`}
               >
-                🏀 Teams
+                <span class="hidden sm:inline">Teams</span>
+                <span class="sm:hidden">🏀</span>
               </button>
             </div>
           </div>
@@ -136,11 +160,12 @@ const App: Component = () => {
 
         {/* Page Content */}
         <Suspense fallback={<div class="flex justify-center items-center min-h-screen"><div class="text-white text-xl">Loading page...</div></div>}>
-          {currentPage() === 'predictions' && <Dashboard />}
+          {currentPage() === 'predictions' && <Dashboard onGameClick={(id) => navigate('game', id)} onTeamClick={(abbr) => navigate('team', abbr)} />}
           {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
           {currentPage() === 'schedule' && <SchedulePage />}
           {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
           {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
+          {currentPage() === 'game' && selectedGame() && <GameDetailPage gameId={selectedGame()} />}
         </Suspense>
       </Show>
     </div>

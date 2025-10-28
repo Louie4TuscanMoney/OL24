@@ -23,7 +23,7 @@ import uvicorn
 import asyncio
 import time
 import sys
-
+import json
 import os
 
 # Import components (all in same directory on Railway)
@@ -1657,6 +1657,221 @@ async def get_team_depth_chart(team_abbr: str):
         
     except Exception as e:
         if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+# ============================================================================
+# ML PREDICTION ENDPOINTS
+# ============================================================================
+
+@app.get("/api/ml/predictions/active")
+async def get_active_ml_predictions():
+    """
+    Get all active ML predictions for live games
+    Returns: List of predictions with game context
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor()
+        
+        # Get latest prediction for each live game (last 5 minutes)
+        cur.execute("""
+            WITH latest_predictions AS (
+                SELECT DISTINCT ON (game_id)
+                    game_id,
+                    point_forecast,
+                    interval_lower,
+                    interval_upper,
+                    model_confidence,
+                    edge_detected,
+                    edge_magnitude,
+                    quarter,
+                    time_remaining,
+                    prediction_timestamp,
+                    is_q2_6min
+                FROM ml_predictions
+                WHERE prediction_timestamp > NOW() - INTERVAL '5 minutes'
+                ORDER BY game_id, prediction_timestamp DESC
+            )
+            SELECT 
+                lp.*,
+                g.home_team_id,
+                g.away_team_id,
+                ht.full_name as home_team,
+                at.full_name as away_team
+            FROM latest_predictions lp
+            JOIN games g ON lp.game_id = g.game_id
+            JOIN teams ht ON g.home_team_id = ht.team_id
+            JOIN teams at ON g.away_team_id = at.team_id
+            WHERE g.status = 'Live'
+            ORDER BY lp.prediction_timestamp DESC
+        """)
+        
+        predictions = []
+        for row in cur.fetchall():
+            predictions.append({
+                "game_id": row[0],
+                "point_forecast": float(row[1]) if row[1] else None,
+                "interval_lower": float(row[2]) if row[2] else None,
+                "interval_upper": float(row[3]) if row[3] else None,
+                "model_confidence": float(row[4]) if row[4] else None,
+                "edge_detected": row[5],
+                "edge_magnitude": float(row[6]) if row[6] else None,
+                "quarter": row[7],
+                "time_remaining": row[8],
+                "prediction_timestamp": row[9].isoformat() if row[9] else None,
+                "is_q2_6min": row[10],
+                "home_team": row[13],
+                "away_team": row[14]
+            })
+        
+        cur.close()
+        conn.close()
+        return predictions
+        
+    except Exception as e:
+        print(f"❌ Error fetching ML predictions: {e}")
+        if conn:
+            conn.close()
+        return []
+
+
+@app.get("/api/ml/prediction/{game_id}")
+async def get_game_ml_prediction(game_id: str):
+    """
+    Get latest ML prediction for a specific game
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not available"}
+    
+    try:
+        cur = conn.cursor()
+        
+        # Get latest prediction
+        cur.execute("""
+            SELECT 
+                point_forecast,
+                interval_lower,
+                interval_upper,
+                model_confidence,
+                edge_detected,
+                edge_magnitude,
+                quarter,
+                time_remaining,
+                prediction_timestamp,
+                is_q2_6min,
+                features_extracted,
+                feature_importance
+            FROM ml_predictions
+            WHERE game_id = %s
+            ORDER BY prediction_timestamp DESC
+            LIMIT 1
+        """, (game_id,))
+        
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return {"error": "No prediction found"}
+        
+        prediction = {
+            "point_forecast": float(row[0]) if row[0] else None,
+            "interval_lower": float(row[1]) if row[1] else None,
+            "interval_upper": float(row[2]) if row[2] else None,
+            "model_confidence": float(row[3]) if row[3] else None,
+            "edge_detected": row[4],
+            "edge_magnitude": float(row[5]) if row[5] else None,
+            "quarter": row[6],
+            "time_remaining": row[7],
+            "prediction_timestamp": row[8].isoformat() if row[8] else None,
+            "is_q2_6min": row[9],
+            "features": row[10],
+            "feature_importance": row[11]
+        }
+        
+        cur.close()
+        conn.close()
+        return prediction
+        
+    except Exception as e:
+        print(f"❌ Error fetching game prediction: {e}")
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.post("/api/ml/prediction")
+async def save_ml_prediction(prediction: dict):
+    """
+    Save ML prediction to database
+    Called by ML engine every 30 seconds for live games
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not available"}
+    
+    try:
+        cur = conn.cursor()
+        
+        # Insert prediction
+        cur.execute("""
+            INSERT INTO ml_predictions (
+                game_id,
+                model_id,
+                quarter,
+                time_remaining,
+                point_forecast,
+                interval_lower,
+                interval_upper,
+                coverage_probability,
+                model_confidence,
+                features_extracted,
+                feature_importance,
+                market_spread,
+                edge_detected,
+                edge_magnitude,
+                is_q2_6min,
+                is_trade_signal
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            RETURNING prediction_id
+        """, (
+            prediction.get('game_id'),
+            prediction.get('model_id', 1),  # Default to model 1
+            prediction.get('quarter'),
+            prediction.get('time_remaining'),
+            prediction.get('point_forecast'),
+            prediction.get('interval_lower'),
+            prediction.get('interval_upper'),
+            prediction.get('coverage_probability', 0.90),
+            prediction.get('model_confidence'),
+            json.dumps(prediction.get('features')) if prediction.get('features') else None,
+            json.dumps(prediction.get('feature_importance')) if prediction.get('feature_importance') else None,
+            prediction.get('market_spread'),
+            prediction.get('edge_detected', False),
+            prediction.get('edge_magnitude'),
+            prediction.get('is_q2_6min', False),
+            prediction.get('is_trade_signal', False)
+        ))
+        
+        prediction_id = cur.fetchone()[0]
+        conn.commit()
+        
+        cur.close()
+        conn.close()
+        
+        return {"success": True, "prediction_id": prediction_id}
+        
+    except Exception as e:
+        print(f"❌ Error saving prediction: {e}")
+        if conn:
+            conn.rollback()
             conn.close()
         return {"error": str(e)}
 
