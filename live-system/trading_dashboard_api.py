@@ -1196,28 +1196,53 @@ def _calculate_consistency(games):
 
 @app.get("/api/stats/teams")
 async def get_all_teams():
-    """Get all 30 NBA teams from database"""
+    """Get all 30 NBA teams with stats computed from player box scores"""
     conn = get_db_connection()
     if not conn:
         return {"error": "Database not configured", "teams": [], "count": 0}
     
     try:
         cursor = conn.cursor()
+        # Compute team stats ON THE FLY from player box scores
         cursor.execute("""
-            SELECT team_id, abbreviation, full_name, conference, division, city
-            FROM teams
-            ORDER BY full_name
+            SELECT 
+                t.team_id,
+                t.abbreviation,
+                t.full_name,
+                t.logo_url,
+                t.primary_color,
+                t.secondary_color,
+                COUNT(DISTINCT pb.game_id) as games_played,
+                -- Compute wins/losses from game results
+                COALESCE(SUM(CASE WHEN pb.plus_minus > 0 THEN 1 ELSE 0 END) / NULLIF(COUNT(DISTINCT pb.game_id), 0), 0) as win_pct,
+                -- Team stats from player aggregates
+                COALESCE(SUM(pb.pts)::float / NULLIF(COUNT(DISTINCT pb.game_id), 0), 0) as ppg,
+                COALESCE(AVG(pb.team_poss), 0) as avg_poss
+            FROM teams t
+            LEFT JOIN player_box_scores pb ON pb.team_id = t.team_id AND pb.season_id = '2025-26'
+            GROUP BY t.team_id, t.abbreviation, t.full_name, t.logo_url, t.primary_color, t.secondary_color
+            ORDER BY ppg DESC NULLS LAST
         """)
         
         teams_list = []
         for row in cursor.fetchall():
+            games = int(row[6]) if row[6] else 0
+            ppg = float(row[8]) if row[8] else 0
+            wins = int(games * float(row[7])) if row[7] and games > 0 else 0
+            losses = games - wins
+            
             teams_list.append({
                 "team_id": row[0],
                 "abbreviation": row[1],
                 "full_name": row[2],
-                "conference": row[3],
-                "division": row[4],
-                "city": row[5]
+                "logo_url": row[3],
+                "primary_color": row[4],
+                "secondary_color": row[5],
+                "games_played": games,
+                "wins": wins,
+                "losses": losses,
+                "ppg": round(ppg, 1),
+                "net_rating": 0  # Placeholder - need opponent stats to compute
             })
         
         conn.close()
