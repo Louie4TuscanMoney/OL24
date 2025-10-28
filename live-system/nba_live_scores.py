@@ -102,6 +102,13 @@ class NBALiveScores:
                 except Exception as e:
                     self._nba_api_failures += 1
                     print(f"⚠️ nba_api failed ({self._nba_api_failures}/{self._max_failures}): {e}")
+                    print(f"   Error type: {type(e).__name__}")
+                    
+                    # Show detailed error for diagnosis
+                    if self._nba_api_failures == 1:  # Only on first failure to avoid spam
+                        import traceback
+                        print(f"   Full error details:")
+                        print(traceback.format_exc())
                     
                     # If too many failures, put in timeout
                     if self._nba_api_failures >= self._max_failures:
