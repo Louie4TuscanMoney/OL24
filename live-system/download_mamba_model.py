@@ -90,24 +90,56 @@ def download_mamba_model(output_path: str = "MAMBA_MENTALITY_SYSTEM.pkl") -> boo
     print(f"   Output path: {output_path}")
     
     try:
+        print("="*80)
+        print("🚀 ATTEMPTING MODEL DOWNLOAD FROM GOOGLE DRIVE")
+        print("="*80)
+        print(f"File ID: {GOOGLE_DRIVE_FILE_ID}")
+        print(f"Output: {output_path}")
+        print(f"URL: https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}")
+        print()
+        
         import gdown
+        print("✅ gdown module imported successfully")
+        
         url = f"https://drive.google.com/uc?id={GOOGLE_DRIVE_FILE_ID}"
+        print(f"🔗 Downloading from: {url}")
+        print("⏳ This may take 1-2 minutes for large files...")
+        print()
+        
         gdown.download(url, output_path, quiet=False)
+        print()
         
         # Verify download
         if os.path.exists(output_path):
             file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            print(f"✅ Model downloaded successfully! ({file_size_mb:.1f} MB)")
+            print("="*80)
+            print(f"✅ MODEL DOWNLOADED SUCCESSFULLY!")
+            print(f"   Size: {file_size_mb:.1f} MB")
+            print(f"   Path: {output_path}")
+            print("="*80)
             return True
         else:
-            print(f"❌ Model download failed!")
+            print("="*80)
+            print("❌ MODEL DOWNLOAD FAILED - FILE DOES NOT EXIST!")
+            print(f"   Expected path: {output_path}")
+            print(f"   File exists: {os.path.exists(output_path)}")
+            print("="*80)
             return False
             
+    except ImportError as e:
+        print("="*80)
+        print("❌ CRITICAL: gdown module not found!")
+        print(f"   Error: {e}")
+        print("   Solution: Add 'gdown' to requirements.txt")
+        print("="*80)
+        return False
     except Exception as e:
-        print(f"❌ Error downloading model: {e}")
-        print(f"⚠️ System will run with synthetic predictions")
+        print("="*80)
+        print(f"❌ MODEL DOWNLOAD ERROR: {e}")
+        print("="*80)
         import traceback
         traceback.print_exc()
+        print("="*80)
         return False
 
 

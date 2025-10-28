@@ -407,31 +407,33 @@ class LiveTradingEngine:
         Returns:
             Prediction dict with OntoRisk analysis
         """
-        # ENHANCED: Extract real Mamba features (33 features) if model available
-        features = None
-        if self.model is not None:
-            features = self.extract_features_from_live_game(game)
-            
-            if features is None:
-                print("⚠️ Feature extraction failed, will use synthetic prediction")
+        # NO SYNTHETIC PREDICTIONS - USER REQUIREMENT
+        if self.model is None:
+            print("❌ NO MODEL LOADED - CANNOT MAKE PREDICTION")
+            return None
         
-        # Check if model is loaded
-        if self.model is None or features is None:
-            print("⚠️ No model loaded or features failed, using synthetic prediction")
-            # Generate synthetic prediction based on current differential
-            prediction = game['current_diff'] + np.random.normal(0, 3)
-        else:
-            # Make prediction with loaded model
-            try:
-                if self.model.get('scaler'):
-                    X = self.model['scaler'].transform(features.reshape(1, -1))
-                else:
-                    X = features.reshape(1, -1)
-                
-                prediction = self.model['model'].predict(X)[0]
-            except Exception as e:
-                print(f"❌ Prediction error: {e}, using synthetic fallback")
-                prediction = game['current_diff'] + np.random.normal(0, 3)
+        # ENHANCED: Extract real Mamba features (33 features)
+        features = self.extract_features_from_live_game(game)
+        
+        if features is None:
+            print("❌ Feature extraction failed, skipping prediction")
+            return None
+        
+        # Make prediction with loaded model
+        if self.model is None:
+            print("❌ NO MODEL - This shouldn't happen")
+            return None
+        
+        try:
+            if self.model.get('scaler'):
+                X = self.model['scaler'].transform(features.reshape(1, -1))
+            else:
+                X = features.reshape(1, -1)
+            
+            prediction = self.model['model'].predict(X)[0]
+        except Exception as e:
+            print(f"❌ Prediction error: {e}")
+            return None
             
         # ENHANCED: Store Mamba prediction for performance tracking (only if real model)
         if self.model is not None:
