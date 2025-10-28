@@ -1,5 +1,33 @@
 {
-  "opportunities": [],
-  "timestamp": "2025-10-28T16:41:40.434619",
-  "count": 0
+  "opportunities": [
+    {
+      "game_id": "0022500123",
+      "matchup": "PHI @ WAS",
+      "current_score": "48-48",
+      "period": "Q2 PT07M003.00S",
+      "prediction": 1.4774111338853524,
+      "market_spread": 0.0,
+      "favorite": "PHI +0.0",
+      "edge": 1.4774111338853524,
+      "p_win": 0.5,
+      "kelly_edge": 0.0,
+      "bet_recommended": false,
+      "bet_side": "",
+      "bet_line": "",
+      "recommended_stake": 0.0,
+      "reason": "Standalone mode",
+      "confidence_interval": [
+        -3.5225888661146474,
+        6.477411133885353
+      ],
+      "american_odds_home": -110,
+      "american_odds_away": -110,
+      "implied_prob_home": 0.5238,
+      "implied_prob_away": 0.5238,
+      "vig_percentage": 4.76,
+      "timestamp": "2025-10-28T16:54:02.602944"
+    }
+  ],
+  "timestamp": "2025-10-28T16:54:02.604747",
+  "count": 1
 }
