@@ -76,7 +76,10 @@ const StatsPage: Component = () => {
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <For each={teams()}>
                 {(team) => (
-                  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-blue-500 transition-all cursor-pointer">
+                  <a 
+                    href={`/team/${team.abbreviation}`}
+                    class="block bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-blue-500 transition-all cursor-pointer hover:scale-105 transform"
+                  >
                     <div class="flex items-center gap-3 mb-2">
                       <Show when={team.logo_url}>
                         <img src={team.logo_url} alt={team.abbreviation} class="w-12 h-12" />
@@ -94,7 +97,7 @@ const StatsPage: Component = () => {
                         {team.net_rating > 0 ? '+' : ''}{team.net_rating?.toFixed(1) || 'N/A'}
                       </div>
                     </div>
-                  </div>
+                  </a>
                 )}
               </For>
             </div>
