@@ -4,44 +4,77 @@
 
 /**
  * Format NBA clock from PT format to readable time
+ * BULLETPROOF CONVERTER - Handles ALL formats
  * Examples:
  *   PT06M15.00S → 6:15
  *   PT00M42.00S → 0:42
  *   PT11M59.00S → 11:59
+ *   6:15 → 6:15 (already formatted)
+ *   6.25 → 6:15 (decimal)
  */
-export function formatClock(clock: string): string {
-  if (!clock || clock === '0.0' || clock === '0:00') {
+export function formatClock(clock: string | undefined | null): string {
+  // Handle null/undefined/empty
+  if (!clock) {
     return '0:00';
   }
   
-  // Handle PT format (e.g., PT06M15.00S)
-  if (clock.includes('PT') && clock.includes('M')) {
+  // Convert to string if needed
+  const clockStr = String(clock).trim();
+  
+  if (!clockStr || clockStr === '0.0' || clockStr === '0:00' || clockStr === 'N/A') {
+    return '0:00';
+  }
+  
+  // ==========================================
+  // METHOD 1: Handle PT format (ISO 8601 Duration)
+  // PT06M15.00S → 6:15
+  // ==========================================
+  if (clockStr.includes('PT') && clockStr.includes('M')) {
     try {
-      const minutes = parseInt(clock.split('M')[0].replace('PT', ''));
-      const secondsPart = clock.split('M')[1].replace('S', '').split('.')[0];
-      const seconds = parseInt(secondsPart) || 0;
+      // Extract minutes: PT06M15.00S → 06
+      const minutesMatch = clockStr.match(/PT(\d+)M/);
+      const minutes = minutesMatch ? parseInt(minutesMatch[1], 10) : 0;
       
-      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      // Extract seconds: PT06M15.00S → 15
+      const secondsMatch = clockStr.match(/M(\d+(?:\.\d+)?)S/);
+      const seconds = secondsMatch ? parseInt(secondsMatch[1], 10) : 0;
+      
+      const formatted = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      console.log(`✅ Clock converted: ${clockStr} → ${formatted}`);
+      return formatted;
     } catch (e) {
-      console.warn('Failed to parse PT clock format:', clock);
-      return clock;
+      console.error('❌ Failed to parse PT format:', clockStr, e);
     }
   }
   
-  // Handle MM:SS format (already good)
-  if (clock.includes(':')) {
-    return clock;
+  // ==========================================
+  // METHOD 2: Already in MM:SS format
+  // 6:15 → 6:15
+  // ==========================================
+  if (clockStr.includes(':')) {
+    return clockStr;
   }
   
-  // Handle decimal format (e.g., 6.25 = 6:15)
+  // ==========================================
+  // METHOD 3: Decimal format
+  // 6.25 → 6:15
+  // ==========================================
   try {
-    const total = parseFloat(clock);
-    const minutes = Math.floor(total);
-    const seconds = Math.round((total - minutes) * 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const total = parseFloat(clockStr);
+    if (!isNaN(total)) {
+      const minutes = Math.floor(total);
+      const seconds = Math.round((total - minutes) * 60);
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
   } catch (e) {
-    return clock;
+    // Ignore
   }
+  
+  // ==========================================
+  // FALLBACK: Return original if all else fails
+  // ==========================================
+  console.warn('⚠️ Could not parse clock format:', clockStr);
+  return clockStr;
 }
 
 /**
