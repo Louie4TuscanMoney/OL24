@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS player_box_scores (
     player_id VARCHAR(10) NOT NULL REFERENCES players(player_id),
     game_id VARCHAR(15) NOT NULL REFERENCES games(game_id),
     game_date DATE NOT NULL,
+    season_id VARCHAR(10) DEFAULT '2025-26',
     team_id VARCHAR(10) REFERENCES teams(team_id),
     
     -- Playing Time
@@ -391,21 +392,26 @@ CREATE INDEX IF NOT EXISTS idx_depth_team_pos ON team_depth_charts(team_id, posi
 -- 4.3 Game Schedule
 CREATE TABLE IF NOT EXISTS nba_schedule (
     game_id VARCHAR(15) PRIMARY KEY,
+    season_id VARCHAR(10) DEFAULT '2025-26',
     game_date DATE NOT NULL,
     game_time TIME,
     home_team_id VARCHAR(10) REFERENCES teams(team_id),
     away_team_id VARCHAR(10) REFERENCES teams(team_id),
+    home_score INT,
+    away_score INT,
     arena VARCHAR(100),
-    tv_network VARCHAR(50),
-    status VARCHAR(20) DEFAULT 'Scheduled',
+    tv_broadcast VARCHAR(50),
+    game_status VARCHAR(20) DEFAULT 'Scheduled',
     
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Create indexes for nba_schedule table
 CREATE INDEX IF NOT EXISTS idx_schedule_date ON nba_schedule(game_date DESC);
+CREATE INDEX IF NOT EXISTS idx_schedule_season ON nba_schedule(season_id, game_date);
 CREATE INDEX IF NOT EXISTS idx_schedule_team_home ON nba_schedule(home_team_id, game_date);
 CREATE INDEX IF NOT EXISTS idx_schedule_team_away ON nba_schedule(away_team_id, game_date);
+CREATE INDEX IF NOT EXISTS idx_schedule_status ON nba_schedule(game_status);
 
 
 -- ============================================================================

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
 Quick V4 Database Population
-Populates the newly migrated V4 schema with NBA data
+Just inserts teams - other data populated by existing scripts
 """
 
 import os
 import psycopg2
-from datetime import datetime, date, timedelta
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
@@ -22,7 +21,7 @@ def populate_database():
     
     try:
         conn = psycopg2.connect(DATABASE_URL)
-        conn.autocommit = False
+        conn.autocommit = True  # No transactions - each insert independent
         cur = conn.cursor()
         
         print("1️⃣  Inserting 30 NBA Teams...")
@@ -43,7 +42,7 @@ def populate_database():
             ('1610612746', 'LAC', 'LA Clippers', 'West', 'Pacific', 'Los Angeles', 'CA', 'Crypto.com Arena'),
             ('1610612747', 'LAL', 'Los Angeles Lakers', 'West', 'Pacific', 'Los Angeles', 'CA', 'Crypto.com Arena'),
             ('1610612763', 'MEM', 'Memphis Grizzlies', 'West', 'Southwest', 'Memphis', 'TN', 'FedExForum'),
-            ('1610612748', 'MIA', 'Miami Heat', 'East', 'Southeast', 'Miami', 'FL', 'FTX Arena'),
+            ('1610612748', 'MIA', 'Miami Heat', 'East', 'Southeast', 'Miami', 'FL', 'Kaseya Center'),
             ('1610612749', 'MIL', 'Milwaukee Bucks', 'East', 'Central', 'Milwaukee', 'WI', 'Fiserv Forum'),
             ('1610612750', 'MIN', 'Minnesota Timberwolves', 'West', 'Northwest', 'Minneapolis', 'MN', 'Target Center'),
             ('1610612740', 'NOP', 'New Orleans Pelicans', 'West', 'Southwest', 'New Orleans', 'LA', 'Smoothie King Center'),
@@ -60,95 +59,41 @@ def populate_database():
             ('1610612764', 'WAS', 'Washington Wizards', 'East', 'Southeast', 'Washington', 'DC', 'Capital One Arena')
         ]
         
+        teams_inserted = 0
         for team in teams_data:
-            cur.execute("""
-                INSERT INTO teams (team_id, abbreviation, full_name, conference, division, city, state, arena)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (team_id) DO NOTHING
-            """, team)
+            try:
+                cur.execute("""
+                    INSERT INTO teams (team_id, abbreviation, full_name, conference, division, city, state, arena)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (team_id) DO NOTHING
+                """, team)
+                teams_inserted += 1
+            except Exception as e:
+                print(f"   ⚠️  Team {team[2]} failed: {e}")
         
-        conn.commit()
-        print(f"   ✅ {len(teams_data)} teams inserted")
+        print(f"   ✅ {teams_inserted}/{len(teams_data)} teams inserted")
         print()
         
-        print("2️⃣  Running Basketball Reference Scraper...")
-        print("   This will populate player box scores for recent games...")
-        print()
-        
-        # Import and run the scraper
-        try:
-            from basketball_reference_scraper import BasketballReferenceScraper
-            scraper = BasketballReferenceScraper()
-            
-            # Scrape last 7 days of games
-            end_date = date.today()
-            start_date = end_date - timedelta(days=7)
-            
-            print(f"   Scraping games from {start_date} to {end_date}...")
-            scraper.scrape_date_range(start_date, end_date)
-            print("   ✅ Box scores populated")
-            
-        except Exception as e:
-            print(f"   ⚠️  Scraper error: {e}")
-            print("   → Run manually: python3 basketball_reference_scraper.py")
-        
-        print()
-        print("3️⃣  Running Comprehensive NBA System...")
-        print("   This will populate injuries, depth charts, schedule...")
-        print()
-        
-        try:
-            from comprehensive_nba_system import ComprehensiveNBASystem
-            system = ComprehensiveNBASystem()
-            
-            # Scrape injuries
-            print("   → Scraping injuries...")
-            system.scrape_injuries()
-            print("   ✅ Injuries populated")
-            
-            # Fetch schedule
-            print("   → Fetching NBA schedule...")
-            system.fetch_nba_schedule()
-            print("   ✅ Schedule populated")
-            
-            # Build depth charts
-            print("   → Building depth charts...")
-            system.build_depth_charts()
-            print("   ✅ Depth charts populated")
-            
-        except Exception as e:
-            print(f"   ⚠️  System error: {e}")
-            print("   → Run manually: python3 comprehensive_nba_system.py")
-        
-        print()
         print("=" * 80)
-        print("✅ DATABASE POPULATION COMPLETE!")
+        print("✅ TEAMS POPULATED!")
         print("=" * 80)
         print()
         
-        # Verify data
+        # Verify teams
         cur.execute("SELECT COUNT(*) FROM teams")
         teams_count = cur.fetchone()[0]
-        print(f"✓ Teams: {teams_count}")
-        
-        cur.execute("SELECT COUNT(*) FROM players")
-        players_count = cur.fetchone()[0]
-        print(f"✓ Players: {players_count}")
-        
-        cur.execute("SELECT COUNT(*) FROM player_box_scores")
-        box_scores_count = cur.fetchone()[0]
-        print(f"✓ Box Scores: {box_scores_count}")
-        
-        cur.execute("SELECT COUNT(*) FROM player_injuries")
-        injuries_count = cur.fetchone()[0]
-        print(f"✓ Injuries: {injuries_count}")
-        
-        cur.execute("SELECT COUNT(*) FROM nba_schedule")
-        schedule_count = cur.fetchone()[0]
-        print(f"✓ Schedule: {schedule_count}")
-        
+        print(f"✓ Teams in database: {teams_count}")
         print()
-        print("🎯 Next: Refresh ontologicxyz.com to see data!")
+        
+        print("Next steps:")
+        print("  1. Populate player data:")
+        print("     python3 basketball_reference_scraper.py")
+        print()
+        print("  2. Populate injuries & schedule:")
+        print("     python3 comprehensive_nba_system.py")
+        print()
+        print("  3. Check frontend:")
+        print("     https://ontologicxyz.com/stats")
         print()
         
         cur.close()
@@ -165,7 +110,6 @@ def populate_database():
         import traceback
         traceback.print_exc()
         if conn:
-            conn.rollback()
             conn.close()
         return False
 
@@ -173,4 +117,3 @@ def populate_database():
 if __name__ == "__main__":
     success = populate_database()
     exit(0 if success else 1)
-
