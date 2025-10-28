@@ -124,6 +124,9 @@ CREATE TABLE IF NOT EXISTS player_box_scores_2024_25 PARTITION OF player_box_sco
 CREATE TABLE IF NOT EXISTS player_box_scores_2025_26 PARTITION OF player_box_scores
     FOR VALUES FROM ('2025-10-01') TO ('2026-06-30');
 
+CREATE TABLE IF NOT EXISTS player_box_scores_2026_27 PARTITION OF player_box_scores
+    FOR VALUES FROM ('2026-10-01') TO ('2027-06-30');
+
 -- ============================================================================
 -- 3. MATERIALIZED VIEW: LAST 10 GAMES (FAST!)
 -- ============================================================================

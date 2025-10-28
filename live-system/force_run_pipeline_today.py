@@ -29,11 +29,22 @@ try:
     # RUN NOW (don't wait for schedule)
     pipeline.run()
     
+    # Verify data IMMEDIATELY before closing
+    import psycopg2
+    cursor = pipeline.cursor
+    cursor.execute("SELECT COUNT(*) FROM player_box_scores")
+    box_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM players")
+    player_count = cursor.fetchone()[0]
+    
     pipeline.close()
     
     print("\n" + "="*80)
     print("✅ FORCE RUN COMPLETED!")
     print("="*80)
+    print(f"\n📊 Immediate verification (before close):")
+    print(f"   Box scores: {box_count}")
+    print(f"   Players: {player_count}")
     print("\n🎯 Check database:")
     print("   psql $DATABASE_URL")
     print("   SELECT COUNT(*) FROM player_box_scores;")

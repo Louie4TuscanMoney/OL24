@@ -37,9 +37,12 @@ class NBANightlyPipeline:
     def __init__(self):
         self.conn = psycopg2.connect(DATABASE_URL)
         self.cursor = self.conn.cursor()
-        self.current_season = '2024-25'
+        # NOTE: Using 2024-25 because 2025-26 box scores not available yet from NBA API
+        self.current_season = '2024-25'  # Will switch to 2025-26 when data available
         self.start_time = None
         print(f"✅ Connected to PostgreSQL")
+        print(f"📅 Season: {self.current_season}")
+        print(f"⚠️  NOTE: 2025-26 box scores not yet available from NBA API")
     
     @staticmethod
     def parse_minutes(min_str):
@@ -110,8 +113,13 @@ class NBANightlyPipeline:
             duration = (datetime.now() - self.start_time).total_seconds()
             self.create_snapshot('success', games_count, duration)
             
-            # Commit
-            self.conn.commit()
+            # FINAL COMMIT (already done in create_snapshot, but being explicit)
+            try:
+                self.conn.commit()
+                print("\n✅ FINAL PIPELINE COMMIT SUCCESSFUL\n")
+            except Exception as commit_err:
+                print(f"\n❌ FINAL PIPELINE COMMIT FAILED: {commit_err}\n")
+                raise
             
             print("="*80)
             print(f"✅ PIPELINE COMPLETED in {duration:.1f}s")
@@ -185,6 +193,7 @@ class NBANightlyPipeline:
                     team_poss[team_id] = poss
                 
                 # Insert player box scores
+                players_inserted = 0
                 for _, row in player_box.iterrows():
                     player_id = str(row['PLAYER_ID'])
                     team_id = str(row['TEAM_ID'])
@@ -221,29 +230,60 @@ class NBANightlyPipeline:
                         self.safe_int(row.get('STL')), self.safe_int(row.get('BLK')), self.safe_int(row.get('TO')), self.safe_int(row.get('PF')), self.safe_int(row.get('PLUS_MINUS')),
                         team_poss.get(team_id, 0)
                     ))
+                    players_inserted += 1
+                
+                if players_inserted == 0:
+                    print(f"   ⚠️ Game {game_id}: 0 players inserted!")
                 
                 games_count += 1
                 
                 if games_count % 10 == 0:
-                    self.conn.commit()
-                    print(f"      {games_count} games...")
+                    try:
+                        self.conn.commit()
+                        print(f"      {games_count} games... ✅ COMMITTED")
+                    except Exception as commit_err:
+                        print(f"      ❌ COMMIT FAILED: {commit_err}")
+                        raise
                     
             except Exception as e:
                 print(f"   ⚠️ Game {game_id} failed: {e}")
+                import traceback
+                traceback.print_exc()
+                self.conn.rollback()  # Rollback failed game
                 continue
+        
+        # Final commit for remaining games
+        try:
+            self.conn.commit()
+            print(f"   ✅ FINAL COMMIT: {games_count} games")
+            
+            # VERIFY IMMEDIATELY AFTER COMMIT
+            self.cursor.execute("SELECT COUNT(*) FROM player_box_scores WHERE season_id = %s", (self.current_season,))
+            count_check = self.cursor.fetchone()[0]
+            print(f"   🔍 Verification: {count_check} box scores in DB after commit")
+            
+        except Exception as commit_err:
+            print(f"   ❌ FINAL COMMIT FAILED: {commit_err}")
+            raise
         
         return games_count
     
     def prune_and_refresh_last10(self):
         """
-        STEP 2: Prune old games, refresh materialized view
+        STEP 2: Refresh materialized view (DON'T prune - keep all for ML!)
         Target: <10 seconds
         """
-        # Prune (delete games beyond 10th most recent)
-        self.cursor.execute("SELECT prune_old_games()")
-        
-        # Refresh materialized view
+        # Refresh materialized view for fast last-10 queries
         self.cursor.execute("SELECT refresh_last10()")
+        
+        # Optional: Prune games older than 3 years (once per month)
+        if datetime.now().day == 1:  # First of month
+            cutoff_date = datetime.now() - timedelta(days=3*365)
+            self.cursor.execute("""
+                DELETE FROM player_box_scores 
+                WHERE game_date < %s
+            """, (cutoff_date,))
+            print(f"   🗑️  Pruned games before {cutoff_date.date()}")
         
         self.conn.commit()
     
@@ -472,21 +512,6 @@ class NBANightlyPipeline:
         else:
             print(f"      ⚠️ Not enough data for RAPM ({len(X)} stints)")
             return 0
-    
-    def prune_and_refresh_last10(self):
-        """
-        STEP 2: Refresh last10 view (DON'T delete games - keep for ML!)
-        """
-        # DON'T PRUNE! Keep all games for future ML models
-        # Only refresh the materialized view for fast queries
-        self.cursor.execute("SELECT refresh_last10()")
-        self.conn.commit()
-        
-        # Optional: Prune games older than 3 years (once per month)
-        if datetime.now().day == 1:  # First of month
-            print("      🗑️  Pruning games >3 years old...")
-            self.cursor.execute("SELECT prune_very_old_games()")
-            self.conn.commit()
     
     def update_standings(self):
         """
