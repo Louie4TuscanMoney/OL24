@@ -28,6 +28,7 @@ const App: Component = () => {
   const [selectedGame, setSelectedGame] = createSignal('');
   const [initialLoading, setInitialLoading] = createSignal(true);
   const [connected] = wsService.connected;
+  const [games] = wsService.games;
 
   // Hide loading screen after connection OR after 3 seconds max
   createEffect(() => {
@@ -183,7 +184,7 @@ const App: Component = () => {
           {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
           {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
           {currentPage() === 'game' && selectedGame() && <GameDetailPage gameId={selectedGame()} />}
-          {currentPage() === 'trading' && <TradingDesk games={wsService.games()} backendUrl={import.meta.env.VITE_BACKEND_URL || 'https://ol24-production.up.railway.app'} />}
+          {currentPage() === 'trading' && <TradingDesk games={Array.from(games().values())} backendUrl={import.meta.env.VITE_BACKEND_URL || 'https://ol24-production.up.railway.app'} />}
         </Suspense>
       </Show>
     </div>
