@@ -6,6 +6,7 @@ uvicorn[standard]>=0.24.0,<1.0.0
 requests>=2.32.0,<3.0.0
 beautifulsoup4>=4.12.0,<5.0.0
 lxml>=4.9.0,<5.0.0
+cloudscraper>=1.2.71,<2.0.0  # Bypass Cloudflare protection
 
 # Scientific Computing (Python 3.12 compatible)
 numpy>=2.0.0,<3.0.0
