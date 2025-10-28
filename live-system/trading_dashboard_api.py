@@ -1155,6 +1155,92 @@ async def build_complete_message() -> dict:
         }
 
 
+def get_db_connection():
+    """Get PostgreSQL connection for stats queries"""
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if DATABASE_URL:
+        import psycopg2
+        return psycopg2.connect(DATABASE_URL)
+    return None
+
+
+# ============================================================================
+# NBA STATS API ENDPOINTS (Rolling Model)
+# ============================================================================
+
+@app.get("/api/stats/teams")
+async def get_all_teams():
+    """Get all 30 NBA teams from database"""
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured", "teams": [], "count": 0}
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT team_id, abbreviation, full_name, conference, division, city
+            FROM teams
+            ORDER BY full_name
+        """)
+        
+        teams_list = []
+        for row in cursor.fetchall():
+            teams_list.append({
+                "team_id": row[0],
+                "abbreviation": row[1],
+                "full_name": row[2],
+                "conference": row[3],
+                "division": row[4],
+                "city": row[5]
+            })
+        
+        conn.close()
+        return {"teams": teams_list, "count": len(teams_list)}
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e), "teams": [], "count": 0}
+
+
+@app.get("/api/stats/standings")
+async def get_standings():
+    """Get current NBA standings from database"""
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT t.abbreviation, t.full_name, s.conference, s.rank, 
+                   s.wins, s.losses, s.gb, s.streak
+            FROM standings s
+            JOIN teams t ON s.team_id = t.team_id
+            WHERE s.updated_at::date = (SELECT MAX(updated_at::date) FROM standings)
+            ORDER BY s.conference, s.rank
+        """)
+        
+        standings_data = {"East": [], "West": []}
+        for row in cursor.fetchall():
+            team_data = {
+                "abbreviation": row[0],
+                "full_name": row[1],
+                "rank": row[3],
+                "wins": row[4],
+                "losses": row[5],
+                "gb": float(row[6]) if row[6] else 0.0,
+                "streak": row[7]
+            }
+            standings_data[row[2]].append(team_data)
+        
+        conn.close()
+        return {"standings": standings_data}
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
 def start_dashboard_api(host: str = "0.0.0.0", port: int = None):
     """
     Start the dashboard API
