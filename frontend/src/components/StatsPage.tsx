@@ -36,22 +36,23 @@ const StatsPage: Component<Props> = (props) => {
 
   onMount(async () => {
     try {
+      console.log('📊 Fetching stats from:', API_BASE);
+      
       // Fetch teams
       const teamsRes = await fetch(`${API_BASE}/api/stats/teams`);
       const teamsData = await teamsRes.json();
+      console.log('Teams response:', teamsData);
       setTeams(teamsData.teams || []);
 
       // Fetch injuries
       const injuriesRes = await fetch(`${API_BASE}/api/injuries`);
       const injuriesData = await injuriesRes.json();
+      console.log('Injuries response:', injuriesData);
       setInjuries(injuriesData.injuries || []);
-
-      // TODO: Add player leaderboard endpoints to backend
-      // For now, we'll show teams and injuries
 
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('❌ Error fetching stats:', error);
       setLoading(false);
     }
   });

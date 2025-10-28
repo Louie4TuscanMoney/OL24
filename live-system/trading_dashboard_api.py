@@ -1063,13 +1063,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Build complete message package
                 message = await build_complete_message()
                 
-                # Send to frontend
-                await websocket.send_json(message)
+                # Check if WebSocket is still open before sending
+                if websocket.client_state.value == 1:  # 1 = OPEN
+                    await websocket.send_json(message)
+                else:
+                    print(f"⚠️ WebSocket closed, ending loop")
+                    break
                 
                 # ⚡ ULTRA REAL-TIME: 1-second updates!
                 # Eliminates all perceived lag, scores update instantly
                 await asyncio.sleep(1)
                 
+            except RuntimeError as e:
+                if "close message" in str(e):
+                    print(f"⚠️ WebSocket already closed, ending loop")
+                    break
+                print(f"⚠️ Error in message loop (continuing): {e}")
+                await asyncio.sleep(1)
+                continue
             except Exception as e:
                 print(f"⚠️ Error in message loop (continuing): {e}")
                 import traceback

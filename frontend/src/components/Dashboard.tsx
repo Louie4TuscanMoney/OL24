@@ -14,39 +14,68 @@ interface DashboardProps {
   onTeamClick?: (teamAbbr: string) => void;
 }
 
-// Team name to abbreviation mapping
-const teamNameToAbbr: Record<string, string> = {
-  'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN', 'New York Knicks': 'NYK',
-  'Philadelphia 76ers': 'PHI', 'Toronto Raptors': 'TOR',
-  'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE', 'Detroit Pistons': 'DET',
-  'Indiana Pacers': 'IND', 'Milwaukee Bucks': 'MIL',
-  'Atlanta Hawks': 'ATL', 'Charlotte Hornets': 'CHA', 'Miami Heat': 'MIA',
-  'Orlando Magic': 'ORL', 'Washington Wizards': 'WAS',
-  'Denver Nuggets': 'DEN', 'Minnesota Timberwolves': 'MIN', 'Oklahoma City Thunder': 'OKC',
-  'Portland Trail Blazers': 'POR', 'Utah Jazz': 'UTA',
-  'Golden State Warriors': 'GSW', 'LA Clippers': 'LAC', 'Los Angeles Lakers': 'LAL',
-  'Phoenix Suns': 'PHX', 'Sacramento Kings': 'SAC',
-  'Dallas Mavericks': 'DAL', 'Houston Rockets': 'HOU', 'Memphis Grizzlies': 'MEM',
-  'New Orleans Pelicans': 'NOP', 'San Antonio Spurs': 'SAS'
+// Comprehensive team name/abbreviation to NBA team ID mapping
+const getTeamId = (teamIdentifier: string): string => {
+  // Map of all possible team name variations + abbreviations → NBA team ID
+  const teamMap: Record<string, string> = {
+    // Full names
+    'Atlanta Hawks': '1610612737',
+    'Boston Celtics': '1610612738',
+    'Brooklyn Nets': '1610612751',
+    'Charlotte Hornets': '1610612766',
+    'Chicago Bulls': '1610612741',
+    'Cleveland Cavaliers': '1610612739',
+    'Dallas Mavericks': '1610612742',
+    'Denver Nuggets': '1610612743',
+    'Detroit Pistons': '1610612765',
+    'Golden State Warriors': '1610612744',
+    'Houston Rockets': '1610612745',
+    'Indiana Pacers': '1610612754',
+    'Los Angeles Clippers': '1610612746',
+    'LA Clippers': '1610612746',
+    'Los Angeles Lakers': '1610612747',
+    'Memphis Grizzlies': '1610612763',
+    'Miami Heat': '1610612748',
+    'Milwaukee Bucks': '1610612749',
+    'Minnesota Timberwolves': '1610612750',
+    'New Orleans Pelicans': '1610612740',
+    'New York Knicks': '1610612752',
+    'Oklahoma City Thunder': '1610612760',
+    'Orlando Magic': '1610612753',
+    'Philadelphia 76ers': '1610612755',
+    'Phoenix Suns': '1610612756',
+    'Portland Trail Blazers': '1610612757',
+    'Sacramento Kings': '1610612758',
+    'San Antonio Spurs': '1610612759',
+    'Toronto Raptors': '1610612761',
+    'Utah Jazz': '1610612762',
+    'Washington Wizards': '1610612764',
+    
+    // Abbreviations
+    'ATL': '1610612737', 'BOS': '1610612738', 'BKN': '1610612751', 'CHA': '1610612766',
+    'CHI': '1610612741', 'CLE': '1610612739', 'DAL': '1610612742', 'DEN': '1610612743',
+    'DET': '1610612765', 'GSW': '1610612744', 'HOU': '1610612745', 'IND': '1610612754',
+    'LAC': '1610612746', 'LAL': '1610612747', 'MEM': '1610612763', 'MIA': '1610612748',
+    'MIL': '1610612749', 'MIN': '1610612750', 'NOP': '1610612740', 'NYK': '1610612752',
+    'OKC': '1610612760', 'ORL': '1610612753', 'PHI': '1610612755', 'PHX': '1610612756',
+    'POR': '1610612757', 'SAC': '1610612758', 'SAS': '1610612759', 'TOR': '1610612761',
+    'UTA': '1610612762', 'WAS': '1610612764'
+  };
+  
+  return teamMap[teamIdentifier] || teamMap[teamIdentifier.toUpperCase()] || '1610612738';
 };
 
-// Team ID for logos (simplified - using team names)
-const getTeamLogo = (teamName: string) => {
-  const teamIds: Record<string, string> = {
-    'Boston Celtics': '1610612738', 'Brooklyn Nets': '1610612751', 'New York Knicks': '1610612752',
-    'Philadelphia 76ers': '1610612755', 'Toronto Raptors': '1610612761',
-    'Chicago Bulls': '1610612741', 'Cleveland Cavaliers': '1610612739', 'Detroit Pistons': '1610612765',
-    'Indiana Pacers': '1610612754', 'Milwaukee Bucks': '1610612749',
-    'Atlanta Hawks': '1610612737', 'Charlotte Hornets': '1610612766', 'Miami Heat': '1610612748',
-    'Orlando Magic': '1610612753', 'Washington Wizards': '1610612764',
-    'Denver Nuggets': '1610612743', 'Minnesota Timberwolves': '1610612750', 'Oklahoma City Thunder': '1610612760',
-    'Portland Trail Blazers': '1610612757', 'Utah Jazz': '1610612762',
-    'Golden State Warriors': '1610612744', 'LA Clippers': '1610612746', 'Los Angeles Lakers': '1610612747',
-    'Phoenix Suns': '1610612756', 'Sacramento Kings': '1610612758',
-    'Dallas Mavericks': '1610612742', 'Houston Rockets': '1610612745', 'Memphis Grizzlies': '1610612763',
-    'New Orleans Pelicans': '1610612740', 'San Antonio Spurs': '1610612759'
-  };
-  return teamIds[teamName] || '1610612738';
+// Team name to abbreviation mapping (for navigation)
+const teamNameToAbbr: Record<string, string> = {
+  'Atlanta Hawks': 'ATL', 'Boston Celtics': 'BOS', 'Brooklyn Nets': 'BKN', 'Charlotte Hornets': 'CHA',
+  'Chicago Bulls': 'CHI', 'Cleveland Cavaliers': 'CLE', 'Dallas Mavericks': 'DAL', 'Denver Nuggets': 'DEN',
+  'Detroit Pistons': 'DET', 'Golden State Warriors': 'GSW', 'Houston Rockets': 'HOU', 'Indiana Pacers': 'IND',
+  'LA Clippers': 'LAC', 'Los Angeles Clippers': 'LAC', 'Los Angeles Lakers': 'LAL',
+  'Memphis Grizzlies': 'MEM', 'Miami Heat': 'MIA', 'Milwaukee Bucks': 'MIL', 'Minnesota Timberwolves': 'MIN',
+  'New Orleans Pelicans': 'NOP', 'New York Knicks': 'NYK', 'Oklahoma City Thunder': 'OKC',
+  'Orlando Magic': 'ORL', 'Philadelphia 76ers': 'PHI', 'Phoenix Suns': 'PHX', 'Portland Trail Blazers': 'POR',
+  'Sacramento Kings': 'SAC', 'San Antonio Spurs': 'SAS', 'Toronto Raptors': 'TOR', 'Utah Jazz': 'UTA',
+  'Washington Wizards': 'WAS'
 };
 
 const Dashboard: Component<DashboardProps> = (props) => {
@@ -69,7 +98,19 @@ const Dashboard: Component<DashboardProps> = (props) => {
   });
 
   // Convert Map to Array for iteration
-  const gamesList = () => Array.from(games().values());
+  const gamesList = () => {
+    const gamesArray = Array.from(games().values());
+    // Debug: Log team names to verify mapping
+    if (gamesArray.length > 0 && gamesArray[0]) {
+      console.log('🏀 Team names from API:', {
+        away: gamesArray[0].away_team,
+        home: gamesArray[0].home_team,
+        away_id: getTeamId(gamesArray[0].away_team),
+        home_id: getTeamId(gamesArray[0].home_team)
+      });
+    }
+    return gamesArray;
+  };
 
   // Live games
   const liveGames = () => gamesList().filter(g => g.is_live);
@@ -172,7 +213,7 @@ const Dashboard: Component<DashboardProps> = (props) => {
                           class="flex items-center gap-4 flex-1 hover:bg-white/5 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                         >
                           <img 
-                            src={`https://cdn.nba.com/logos/nba/${getTeamLogo(game.away_team)}/primary/L/logo.svg`}
+                            src={`https://cdn.nba.com/logos/nba/${getTeamId(game.away_team)}/primary/L/logo.svg`}
                             alt={game.away_team}
                             class="w-12 h-12 sm:w-14 sm:h-14 transition-transform group-hover:scale-110"
                           />
@@ -193,7 +234,7 @@ const Dashboard: Component<DashboardProps> = (props) => {
                           class="flex items-center gap-4 flex-1 hover:bg-white/5 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                         >
                           <img 
-                            src={`https://cdn.nba.com/logos/nba/${getTeamLogo(game.home_team)}/primary/L/logo.svg`}
+                            src={`https://cdn.nba.com/logos/nba/${getTeamId(game.home_team)}/primary/L/logo.svg`}
                             alt={game.home_team}
                             class="w-12 h-12 sm:w-14 sm:h-14 transition-transform group-hover:scale-110"
                           />
@@ -274,7 +315,7 @@ const Dashboard: Component<DashboardProps> = (props) => {
                         class="flex items-center gap-3 hover:bg-white/5 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                       >
                         <img 
-                          src={`https://cdn.nba.com/logos/nba/${getTeamLogo(game.away_team)}/primary/L/logo.svg`}
+                          src={`https://cdn.nba.com/logos/nba/${getTeamId(game.away_team)}/primary/L/logo.svg`}
                           alt={game.away_team}
                           class="w-10 h-10"
                         />
@@ -290,7 +331,7 @@ const Dashboard: Component<DashboardProps> = (props) => {
                         class="flex items-center gap-3 hover:bg-white/5 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                       >
                         <img 
-                          src={`https://cdn.nba.com/logos/nba/${getTeamLogo(game.home_team)}/primary/L/logo.svg`}
+                          src={`https://cdn.nba.com/logos/nba/${getTeamId(game.home_team)}/primary/L/logo.svg`}
                           alt={game.home_team}
                           class="w-10 h-10"
                         />
