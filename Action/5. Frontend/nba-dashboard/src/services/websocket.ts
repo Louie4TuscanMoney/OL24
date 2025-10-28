@@ -62,11 +62,17 @@ export class WebSocketService {
   }
 
   private handleMessage(message: any) {
-    this.lastUpdate[1](new Date());
+    const now = new Date();
+    this.lastUpdate[1](now);
+    
+    console.log(`⚡ [${now.toLocaleTimeString()}] Message received from Railway`);
 
     // Handle Railway backend format (type: "update")
     if (message.type === 'update') {
-      console.log('📦 Received update from Railway:', message);
+      console.log('📦 Received update from Railway:');
+      console.log('   - Games:', message.live_games?.length || 0);
+      console.log('   - Predictions:', message.opportunities?.length || 0);
+      console.log('   - Timestamp:', message.timestamp);
       
       // Update all games
       if (message.live_games) {
@@ -85,8 +91,14 @@ export class WebSocketService {
             is_live: game.status === 2 // status 2 = live
           };
           gamesMap.set(game.game_id, mappedGame);
+          
+          // Log score updates for debugging latency
+          if (game.status === 2) {
+            console.log(`   🏀 ${game.away_team} ${game.away_score} @ ${game.home_team} ${game.home_score} | Q${game.period} ${game.clock}`);
+          }
         });
         this.games[1](gamesMap);
+        console.log(`✅ Updated ${gamesMap.size} games in state`);
       }
       
       // Update predictions from opportunities
