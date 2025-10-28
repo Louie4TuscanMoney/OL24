@@ -1422,6 +1422,247 @@ async def get_player_profile(player_id: str):
         return {"error": str(e)}
 
 
+# ============================================================================
+# NEW COMPREHENSIVE NBA ANALYTICS ENDPOINTS
+# ============================================================================
+
+@app.get("/api/injuries")
+async def get_all_injuries():
+    """
+    Get all active player injuries
+    Returns: List of injured players with status, type, description
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"injuries": []}
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                p.player_id, p.name, p.position,
+                t.abbreviation, t.full_name,
+                i.status, i.injury_type, i.description,
+                i.injury_date, i.return_date
+            FROM player_injuries i
+            JOIN players p ON p.player_id = i.player_id
+            LEFT JOIN teams t ON t.team_id = p.team_id
+            WHERE i.is_active = TRUE
+            ORDER BY i.injury_date DESC
+        """)
+        
+        injuries = []
+        for row in cursor.fetchall():
+            injuries.append({
+                "player_id": row[0],
+                "name": row[1],
+                "position": row[2],
+                "team_abbr": row[3],
+                "team_name": row[4],
+                "status": row[5],
+                "injury_type": row[6],
+                "description": row[7],
+                "injury_date": row[8].strftime('%Y-%m-%d') if row[8] else None,
+                "return_date": row[9].strftime('%Y-%m-%d') if row[9] else None
+            })
+        
+        conn.close()
+        return {"injuries": injuries, "count": len(injuries)}
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.get("/api/schedule")
+async def get_nba_schedule(days_ahead: int = 7):
+    """
+    Get NBA schedule for next N days
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"games": []}
+    
+    try:
+        from datetime import date, timedelta
+        today = date.today()
+        end_date = today + timedelta(days=days_ahead)
+        
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                s.game_id, s.game_date, s.game_time,
+                home.abbreviation, home.full_name, home.logo_url,
+                away.abbreviation, away.full_name, away.logo_url,
+                s.game_status, s.home_score, s.away_score,
+                s.arena, s.tv_broadcast
+            FROM nba_schedule s
+            JOIN teams home ON home.team_id = s.home_team_id
+            JOIN teams away ON away.team_id = s.away_team_id
+            WHERE s.game_date >= %s AND s.game_date <= %s
+            ORDER BY s.game_date, s.game_time
+        """, (today, end_date))
+        
+        games = []
+        for row in cursor.fetchall():
+            games.append({
+                "game_id": row[0],
+                "date": row[1].strftime('%Y-%m-%d'),
+                "time": row[2].strftime('%H:%M') if row[2] else None,
+                "home_team": {"abbr": row[3], "name": row[4], "logo": row[5]},
+                "away_team": {"abbr": row[6], "name": row[7], "logo": row[8]},
+                "status": row[9],
+                "score": {"home": row[10], "away": row[11]} if row[10] else None,
+                "arena": row[12],
+                "tv": row[13]
+            })
+        
+        conn.close()
+        return {"games": games, "count": len(games)}
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.get("/api/team/{team_abbr}/depth-chart")
+async def get_team_depth_chart(team_abbr: str):
+    """
+    Get team depth chart with projected starters
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get team ID
+        cursor.execute("SELECT team_id, full_name FROM teams WHERE abbreviation = %s", (team_abbr,))
+        team_row = cursor.fetchone()
+        if not team_row:
+            conn.close()
+            return {"error": "Team not found"}
+        
+        team_id, team_name = team_row
+        
+        # Get depth chart
+        cursor.execute("""
+            SELECT 
+                p.player_id, p.name, p.position, p.jersey_number,
+                dc.depth_rank, dc.avg_mpg, dc.is_starter,
+                ps.ppg, ps.rpg, ps.apg,
+                (SELECT status FROM player_injuries 
+                 WHERE player_id = p.player_id AND is_active = TRUE 
+                 LIMIT 1) as injury_status
+            FROM team_depth_charts dc
+            JOIN players p ON p.player_id = dc.player_id
+            LEFT JOIN player_season_stats ps ON ps.player_id = p.player_id AND ps.season_id = dc.season_id
+            WHERE dc.team_id = %s AND dc.season_id = '2025-26'
+            ORDER BY dc.position, dc.depth_rank
+        """, (team_id,))
+        
+        positions = {'PG': [], 'SG': [], 'SF': [], 'PF': [], 'C': []}
+        starters = []
+        
+        for row in cursor.fetchall():
+            player_data = {
+                "player_id": row[0],
+                "name": row[1],
+                "position": row[2],
+                "jersey": row[3],
+                "depth_rank": row[4],
+                "mpg": float(row[5]) if row[5] else 0,
+                "is_starter": row[6],
+                "ppg": float(row[7]) if row[7] else 0,
+                "rpg": float(row[8]) if row[8] else 0,
+                "apg": float(row[9]) if row[9] else 0,
+                "injury_status": row[10]
+            }
+            
+            if row[2] in positions:
+                positions[row[2]].append(player_data)
+            
+            if row[6]:  # is_starter
+                starters.append(player_data)
+        
+        conn.close()
+        
+        return {
+            "team": {"abbreviation": team_abbr, "name": team_name},
+            "starters": starters,
+            "depth_chart": positions,
+            "total_players": sum(len(p) for p in positions.values())
+        }
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.get("/api/team/{team_abbr}/schedule")
+async def get_team_schedule(team_abbr: str, days_ahead: int = 14):
+    """
+    Get team schedule for next N days
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"games": []}
+    
+    try:
+        from datetime import date, timedelta
+        today = date.today()
+        end_date = today + timedelta(days=days_ahead)
+        
+        cursor = conn.cursor()
+        
+        # Get team ID
+        cursor.execute("SELECT team_id FROM teams WHERE abbreviation = %s", (team_abbr,))
+        team_row = cursor.fetchone()
+        if not team_row:
+            conn.close()
+            return {"error": "Team not found"}
+        
+        team_id = team_row[0]
+        
+        cursor.execute("""
+            SELECT 
+                s.game_id, s.game_date, s.game_time,
+                home.abbreviation, away.abbreviation,
+                s.game_status, s.arena,
+                CASE WHEN s.home_team_id = %s THEN 'Home' ELSE 'Away' END as location
+            FROM nba_schedule s
+            JOIN teams home ON home.team_id = s.home_team_id
+            JOIN teams away ON away.team_id = s.away_team_id
+            WHERE (s.home_team_id = %s OR s.away_team_id = %s)
+              AND s.game_date >= %s AND s.game_date <= %s
+            ORDER BY s.game_date, s.game_time
+        """, (team_id, team_id, team_id, today, end_date))
+        
+        games = []
+        for row in cursor.fetchall():
+            games.append({
+                "game_id": row[0],
+                "date": row[1].strftime('%Y-%m-%d'),
+                "time": row[2].strftime('%H:%M') if row[2] else None,
+                "opponent": row[4] if row[7] == 'Home' else row[3],
+                "location": row[7],
+                "status": row[5],
+                "arena": row[6]
+            })
+        
+        conn.close()
+        return {"team": team_abbr, "games": games, "count": len(games)}
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
 def start_dashboard_api(host: str = "0.0.0.0", port: int = None):
     """
     Start the dashboard API

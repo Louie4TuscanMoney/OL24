@@ -128,7 +128,69 @@ CREATE TABLE IF NOT EXISTS player_box_scores_2026_27 PARTITION OF player_box_sco
     FOR VALUES FROM ('2026-10-01') TO ('2027-06-30');
 
 -- ============================================================================
--- 3. MATERIALIZED VIEW: LAST 10 GAMES (FAST!)
+-- 3. INJURIES & DEPTH CHARTS
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS player_injuries (
+    injury_id SERIAL PRIMARY KEY,
+    player_id VARCHAR(10) REFERENCES players(player_id),
+    injury_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL, -- 'Out', 'Day-To-Day', 'Questionable', 'Probable', 'GTD'
+    injury_type VARCHAR(100), -- 'Knee', 'Ankle', 'Rest', etc.
+    description TEXT,
+    return_date DATE, -- Projected return
+    is_active BOOLEAN DEFAULT TRUE, -- False when player returns
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(player_id, injury_date)
+);
+
+CREATE INDEX idx_player_injuries_player ON player_injuries(player_id);
+CREATE INDEX idx_player_injuries_active ON player_injuries(is_active);
+
+CREATE TABLE IF NOT EXISTS team_depth_charts (
+    depth_id SERIAL PRIMARY KEY,
+    team_id VARCHAR(10) REFERENCES teams(team_id),
+    player_id VARCHAR(10) REFERENCES players(player_id),
+    position VARCHAR(5) NOT NULL, -- 'PG', 'SG', 'SF', 'PF', 'C'
+    depth_rank INTEGER NOT NULL, -- 1 = starter, 2 = backup, etc.
+    avg_mpg FLOAT, -- Average minutes per game
+    is_starter BOOLEAN DEFAULT FALSE,
+    season_id VARCHAR(10) REFERENCES seasons(season_id),
+    last_updated TIMESTAMP DEFAULT NOW(),
+    UNIQUE(team_id, player_id, position, season_id)
+);
+
+CREATE INDEX idx_depth_charts_team ON team_depth_charts(team_id);
+CREATE INDEX idx_depth_charts_starter ON team_depth_charts(is_starter);
+
+-- ============================================================================
+-- 4. SCHEDULES
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS nba_schedule (
+    game_id VARCHAR(15) PRIMARY KEY,
+    game_date DATE NOT NULL,
+    game_time TIME,
+    home_team_id VARCHAR(10) REFERENCES teams(team_id),
+    away_team_id VARCHAR(10) REFERENCES teams(team_id),
+    season_id VARCHAR(10) REFERENCES seasons(season_id),
+    game_status VARCHAR(20) DEFAULT 'Scheduled', -- 'Scheduled', 'Live', 'Final', 'Postponed'
+    home_score INTEGER,
+    away_score INTEGER,
+    arena VARCHAR(100),
+    tv_broadcast VARCHAR(100),
+    is_playoffs BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_schedule_date ON nba_schedule(game_date);
+CREATE INDEX idx_schedule_home ON nba_schedule(home_team_id);
+CREATE INDEX idx_schedule_away ON nba_schedule(away_team_id);
+CREATE INDEX idx_schedule_status ON nba_schedule(game_status);
+
+-- ============================================================================
+-- 5. MATERIALIZED VIEW: LAST 10 GAMES (FAST!)
 -- ============================================================================
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS player_last10 AS
