@@ -25,6 +25,12 @@ export class WebSocketService {
   public lastUpdate = createSignal<Date>(new Date());
 
   connect() {
+    // Prevent multiple connections
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+      console.log('⚠️ WebSocket already connected/connecting, skipping');
+      return;
+    }
+
     console.log('🔌 Connecting to WebSocket:', WS_URL);
 
     try {
@@ -32,6 +38,7 @@ export class WebSocketService {
 
       this.ws.onopen = () => {
         console.log('✅ WebSocket connected');
+        console.log('   Connection ID:', Date.now()); // Track which connection this is
         this.connected[1](true);
         this.reconnectAttempts = 0;
       };
@@ -61,6 +68,8 @@ export class WebSocketService {
     }
   }
 
+  private lastMessageTimestamp: string = '';
+
   private handleMessage(message: any) {
     const now = new Date();
     this.lastUpdate[1](now);
@@ -69,6 +78,13 @@ export class WebSocketService {
 
     // Handle Railway backend format (type: "update")
     if (message.type === 'update') {
+      // ANTI-CACHING: Ignore duplicate/old messages
+      if (message.timestamp && message.timestamp === this.lastMessageTimestamp) {
+        console.log('⚠️ DUPLICATE MESSAGE - Ignoring (same timestamp)');
+        return;
+      }
+      this.lastMessageTimestamp = message.timestamp;
+      
       console.log('📦 Received update from Railway:');
       console.log('   - Games:', message.live_games?.length || 0);
       console.log('   - Predictions:', message.opportunities?.length || 0);
@@ -77,6 +93,9 @@ export class WebSocketService {
       // Update all games
       if (message.live_games) {
         const gamesMap = new Map();
+        let updatedCount = 0;
+        let skippedCount = 0;
+        
         message.live_games.forEach((game: any) => {
           // Map backend fields to frontend types
           const mappedGame: NBAGame = {
@@ -90,7 +109,26 @@ export class WebSocketService {
             clock: game.clock, // Keep original for compatibility
             is_live: game.status === 2 // status 2 = live
           };
+          
+          // Check if this is newer data than what we have
+          const currentGames = this.games[0]();
+          const existingGame = currentGames.get(game.game_id);
+          if (existingGame) {
+            // Only update if scores changed or clock changed
+            const scoresChanged = existingGame.score_home !== mappedGame.score_home || 
+                                 existingGame.score_away !== mappedGame.score_away;
+            const clockChanged = existingGame.clock !== mappedGame.clock;
+            
+            if (!scoresChanged && !clockChanged) {
+              skippedCount++;
+              console.log(`   ⏭️  No changes for ${game.away_team} @ ${game.home_team}`);
+              gamesMap.set(game.game_id, existingGame); // Keep existing
+              return;
+            }
+          }
+          
           gamesMap.set(game.game_id, mappedGame);
+          updatedCount++;
           
           // Log score updates for debugging latency
           if (game.status === 2) {
@@ -98,7 +136,7 @@ export class WebSocketService {
           }
         });
         this.games[1](gamesMap);
-        console.log(`✅ Updated ${gamesMap.size} games in state`);
+        console.log(`✅ Updated ${updatedCount} games, skipped ${skippedCount} unchanged`);
       }
       
       // Update predictions from opportunities
