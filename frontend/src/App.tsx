@@ -9,13 +9,19 @@
  * - Team pages with lineups
  */
 
-import { type Component, createSignal, createEffect, lazy } from 'solid-js';
+import { type Component, createSignal, createEffect, lazy, Suspense } from 'solid-js';
 
 // Lazy load pages for faster initial load
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const StatsPage = lazy(() => import('./components/StatsPage'));
 const SchedulePage = lazy(() => import('./components/SchedulePage'));
 const TeamPage = lazy(() => import('./components/TeamPage'));
+
+const LoadingSpinner = () => (
+  <div class="flex items-center justify-center min-h-screen">
+    <div class="text-white text-2xl">Loading...</div>
+  </div>
+);
 
 const App: Component = () => {
   const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'team'>('predictions');
@@ -108,10 +114,12 @@ const App: Component = () => {
       </nav>
 
       {/* Page Content */}
-      {currentPage() === 'predictions' && <Dashboard />}
-      {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
-      {currentPage() === 'schedule' && <SchedulePage />}
-      {currentPage() === 'team' && <TeamPage teamAbbr={selectedTeam()} />}
+      <Suspense fallback={<LoadingSpinner />}>
+        {currentPage() === 'predictions' && <Dashboard />}
+        {currentPage() === 'stats' && <StatsPage onTeamClick={(abbr) => navigate('team', abbr)} />}
+        {currentPage() === 'schedule' && <SchedulePage />}
+        {currentPage() === 'team' && <TeamPage teamAbbr={selectedTeam()} />}
+      </Suspense>
     </div>
   );
 };
