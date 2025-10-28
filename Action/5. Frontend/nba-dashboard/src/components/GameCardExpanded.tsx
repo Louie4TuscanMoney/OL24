@@ -9,6 +9,7 @@ import type { NBAGame, EnhancedPrediction, Edge, BettingRecommendation, ScorePat
 import PredictionChart from './PredictionChart';
 import RiskLayers from './RiskLayers';
 import FeatureDetailsModal from './FeatureDetailsModal';
+import { formatClock } from '../utils/formatters';
 
 interface Props {
   game: NBAGame;
@@ -42,7 +43,7 @@ const GameCardExpanded: Component<Props> = (props) => {
               <span class="text-red-500 font-semibold text-sm">LIVE</span>
             </span>
           </Show>
-          <span class="text-gray-400 text-sm">Q{props.game.quarter} • {props.game.time_remaining}</span>
+          <span class="text-gray-400 text-sm">Q{props.game.quarter} • {formatClock(props.game.time_remaining)}</span>
         </div>
         <span class="text-xs text-gray-500">{props.game.game_id}</span>
       </div>
