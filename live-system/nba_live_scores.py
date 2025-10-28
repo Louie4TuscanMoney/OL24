@@ -59,7 +59,7 @@ class NBALiveScores:
         self._nba_api_timeout_until = 0
         
         print(f"✅ NBA API initialized: REAL-TIME with rate limiting (1s cooldown)")
-        print(f"   Priority: nba_api (instant) → ESPN (10s) → CDN (5-10 min)")
+        print(f"   Priority: nba_api (instant) → ESPN (1s!) → CDN (5-10 min)")
         
     def get_todays_games(self) -> List[Dict]:
         """
@@ -117,7 +117,7 @@ class NBALiveScores:
                     
                     print(f"   Trying ESPN...")
         
-        # METHOD 2: ESPN API (FAST - 10 second updates!)
+        # METHOD 2: ESPN API (ULTRA FAST - 1 SECOND UPDATES!)
         # Apply rate limiting
         if (now - self._last_espn_api_call) >= self._espn_api_cooldown:
             try:
@@ -163,7 +163,7 @@ class NBALiveScores:
     
     def _parse_espn_game(self, event_data: Dict) -> Dict:
         """
-        Parse ESPN API game data (FASTEST - 10 sec updates!)
+        Parse ESPN API game data (FASTEST - 1 SEC updates!)
         
         Returns:
             Dict with game state
