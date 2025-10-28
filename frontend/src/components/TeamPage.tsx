@@ -30,6 +30,7 @@ interface Props {
 
 const TeamPage: Component<Props> = (props) => {
   const [starters, setStarters] = createSignal<Player[]>([]);
+  const [bench, setBench] = createSignal<Player[]>([]);
   const [depthChart, setDepthChart] = createSignal<{ [key: string]: Player[] }>({});
   const [schedule, setSchedule] = createSignal<TeamScheduleGame[]>([]);
   const [teamName, setTeamName] = createSignal('');
@@ -53,6 +54,7 @@ const TeamPage: Component<Props> = (props) => {
       const depthData = await depthRes.json();
       
       setStarters(depthData.starters || []);
+      setBench(depthData.bench || []);
       setDepthChart(depthData.depth_chart || {});
 
       // Fetch team schedule
@@ -156,6 +158,47 @@ const TeamPage: Component<Props> = (props) => {
                         <span class="text-gray-400">APG:</span>
                         <span class="text-white font-semibold">{player.apg.toFixed(1)}</span>
                       </div>
+                      {/* Advanced Stats */}
+                      <div class="pt-2 mt-2 border-t border-gray-700">
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-500">TS%:</span>
+                          <span class="text-blue-400">{((player as any).ts_pct * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-500">Per-100:</span>
+                          <span class="text-blue-400">{(player as any).pts_100?.toFixed(1)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+
+          {/* Bench Players */}
+          <div class="mb-8">
+            <h2 class="text-3xl font-bold text-white mb-4">🔄 Bench (Rotation Players)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <For each={bench()}>
+                {(player) => (
+                  <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div class="mb-3">
+                      <div class="text-white font-bold">{player.name}</div>
+                      <div class="text-gray-400 text-xs">#{player.jersey} | {player.position}</div>
+                      <Show when={player.injury_status}>
+                        <div class="mt-1 px-2 py-1 bg-red-600 text-white text-xs rounded inline-block">
+                          {player.injury_status}
+                        </div>
+                      </Show>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 text-xs">
+                      <div class="text-gray-400">MPG:</div>
+                      <div class="text-white">{player.mpg.toFixed(1)}</div>
+                      <div class="text-gray-400">PPG:</div>
+                      <div class="text-white">{player.ppg.toFixed(1)}</div>
+                      <div class="text-gray-400">TS%:</div>
+                      <div class="text-blue-400">{((player as any).ts_pct * 100).toFixed(1)}%</div>
                     </div>
                   </div>
                 )}

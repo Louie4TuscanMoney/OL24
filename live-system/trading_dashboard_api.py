@@ -1577,12 +1577,14 @@ async def get_team_depth_chart(team_abbr: str):
         
         team_id, team_name = team_row
         
-        # Get depth chart
+        # Get depth chart with ADVANCED STATS
         cursor.execute("""
             SELECT 
                 p.player_id, p.name, p.position, p.jersey_number,
                 dc.depth_rank, dc.avg_mpg, dc.is_starter,
-                ps.ppg, ps.rpg, ps.apg,
+                ps.ppg, ps.rpg, ps.apg, ps.gp,
+                ps.ts_pct, ps.efg_pct, ps.pts_100, ps.reb_100, ps.ast_100,
+                ps.fg_pct, ps.fg3_pct, ps.ft_pct,
                 (SELECT status FROM player_injuries 
                  WHERE player_id = p.player_id AND is_active = TRUE 
                  LIMIT 1) as injury_status
@@ -1590,11 +1592,14 @@ async def get_team_depth_chart(team_abbr: str):
             JOIN players p ON p.player_id = dc.player_id
             LEFT JOIN player_season_stats ps ON ps.player_id = p.player_id AND ps.season_id = dc.season_id
             WHERE dc.team_id = %s AND dc.season_id = '2025-26'
-            ORDER BY dc.position, dc.depth_rank
+            ORDER BY dc.is_starter DESC, dc.depth_rank, dc.avg_mpg DESC
         """, (team_id,))
         
         positions = {'PG': [], 'SG': [], 'SF': [], 'PF': [], 'C': []}
         starters = []
+        
+        bench = []
+        all_players = []
         
         for row in cursor.fetchall():
             player_data = {
@@ -1608,22 +1613,38 @@ async def get_team_depth_chart(team_abbr: str):
                 "ppg": float(row[7]) if row[7] else 0,
                 "rpg": float(row[8]) if row[8] else 0,
                 "apg": float(row[9]) if row[9] else 0,
-                "injury_status": row[10]
+                "gp": int(row[10]) if row[10] else 0,
+                # ADVANCED STATS
+                "ts_pct": float(row[11]) if row[11] else 0,
+                "efg_pct": float(row[12]) if row[12] else 0,
+                "pts_100": float(row[13]) if row[13] else 0,
+                "reb_100": float(row[14]) if row[14] else 0,
+                "ast_100": float(row[15]) if row[15] else 0,
+                "fg_pct": float(row[16]) if row[16] else 0,
+                "fg3_pct": float(row[17]) if row[17] else 0,
+                "ft_pct": float(row[18]) if row[18] else 0,
+                "injury_status": row[19]
             }
+            
+            all_players.append(player_data)
             
             if row[2] in positions:
                 positions[row[2]].append(player_data)
             
             if row[6]:  # is_starter
                 starters.append(player_data)
+            else:
+                bench.append(player_data)
         
         conn.close()
         
         return {
             "team": {"abbreviation": team_abbr, "name": team_name},
             "starters": starters,
+            "bench": bench,
+            "all_players": all_players,
             "depth_chart": positions,
-            "total_players": sum(len(p) for p in positions.values())
+            "total_players": len(all_players)
         }
         
     except Exception as e:
