@@ -1149,7 +1149,9 @@ async def build_complete_message() -> dict:
                     'clock': g.get('clock', ''),  # Also include clock
                     'is_live': g.get('status') == 2,  # Frontend expects is_live
                     'status': g.get('status', 1),
-                    'status_text': g.get('status_text', '')
+                    'status_text': g.get('status_text', ''),
+                    'game_time': g.get('game_time', ''),  # PST time
+                    'game_date': g.get('game_date', '')   # Date
                 }
                 live_games.append(game_mapped)
         else:
@@ -1613,11 +1615,23 @@ async def get_nba_schedule(days_ahead: int = 7):
 @app.get("/api/team/{team_abbr}/depth-chart")
 async def get_team_depth_chart(team_abbr: str):
     """
-    Get team depth chart with projected starters
+    Get team depth chart with projected starters (using nba_api!)
     """
+    # Use nba_api team service instead of empty database
+    try:
+        import sys
+        sys.path.insert(0, '/app/backend/services')
+        from nba_team_service import team_service
+        
+        result = team_service.get_depth_chart(team_abbr)
+        return result
+    except Exception as e:
+        print(f"⚠️  Team service not available, falling back to database...")
+    
+    # Fallback to database (if service fails)
     conn = get_db_connection()
     if not conn:
-        return {"error": "Database not configured"}
+        return {"error": "Database not configured and team service unavailable"}
     
     try:
         cursor = conn.cursor()

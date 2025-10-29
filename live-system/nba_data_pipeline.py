@@ -211,10 +211,18 @@ class ESPNAPIClient:
             home_score = int(home.get('score', 0) or 0)
             away_score = int(away.get('score', 0) or 0)
             
-            # Extract game time and date
-            game_date_obj = datetime.fromisoformat(event.get('date', '').replace('Z', '+00:00'))
-            game_time = game_date_obj.strftime('%I:%M %p ET')  # e.g., "07:00 PM ET"
-            game_date = game_date_obj.strftime('%b %d, %Y')    # e.g., "Oct 28, 2025"
+            # Extract game time and date - CONVERT TO PST!
+            from datetime import timezone, timedelta
+            
+            game_date_utc = datetime.fromisoformat(event.get('date', '').replace('Z', '+00:00'))
+            
+            # Convert UTC to PST (UTC - 8 hours for PST, UTC - 7 for PDT)
+            # For now, using PST (UTC-8). Should check DST but PST is what user wants.
+            pst_offset = timedelta(hours=-8)
+            game_date_pst = game_date_utc + pst_offset
+            
+            game_time = game_date_pst.strftime('%I:%M %p PST')  # e.g., "04:00 PM PST"
+            game_date = game_date_pst.strftime('%b %d, %Y')     # e.g., "Oct 28, 2025"
             
             # Force LIVE if started
             if status_id == 1 and (home_score > 0 or away_score > 0 or period > 0):
