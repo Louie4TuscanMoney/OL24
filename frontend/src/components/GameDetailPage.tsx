@@ -1,5 +1,6 @@
 import { type Component, createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { wsService } from '../services/websocket';
+import { MambaLiveWidget } from './MambaLiveWidget';
 
 interface GameDetailPageProps {
   gameId: string;
@@ -332,6 +333,11 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
               <div class="text-gray-400">Mamba model requires 18 minutes of play-by-play data</div>
               <div class="text-gray-500 text-sm mt-2">Current: Q{game()!.quarter} {game()!.time_remaining}</div>
             </div>
+          </Show>
+
+          {/* 🎯 MAMBA LIVE PATTERN VISUALIZATION */}
+          <Show when={game()!.is_live}>
+            <MambaLiveWidget gameId={props.gameId} />
           </Show>
 
           {/* BACKEND STATUS - What's happening right now */}

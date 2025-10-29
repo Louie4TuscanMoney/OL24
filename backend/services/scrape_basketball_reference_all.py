@@ -129,7 +129,7 @@ class ComprehensiveBballRefScraper:
             return 0
         
         # Parse table
-        rows = self.parse_table_from_html(response.content, 'per_poss_stats')
+        rows = self.parse_table_from_html(response.content, 'per_poss')
         
         if not rows:
             print("   ❌ Could not find table")
@@ -140,7 +140,7 @@ class ComprehensiveBballRefScraper:
         inserted = 0
         for player_data in rows:
             try:
-                player_name = player_data.get('player', '').strip()
+                player_name = player_data.get('name_display', '').strip()
                 team_abbr = player_data.get('team_name_abbr', '').strip()
                 
                 if not player_name or not team_abbr:
@@ -154,16 +154,17 @@ class ComprehensiveBballRefScraper:
                 player_id = self.player_map.get(player_name.lower())
                 
                 # Get stats
-                games_played = int(player_data.get('g', 0) or 0)
-                mpg = float(player_data.get('mp_per_g', 0) or 0)
+                games_played = int(player_data.get('games', 0) or 0)
+                total_minutes = float(player_data.get('mp', 0) or 0)
+                mpg = total_minutes / games_played if games_played > 0 else 0
                 
-                # Per-100 stats (multiply by 100 since BR gives per-possession)
-                pts_100 = float(player_data.get('pts_per_poss', 0) or 0) * 100
-                reb_100 = float(player_data.get('trb_per_poss', 0) or 0) * 100
-                ast_100 = float(player_data.get('ast_per_poss', 0) or 0) * 100
-                stl_100 = float(player_data.get('stl_per_poss', 0) or 0) * 100
-                blk_100 = float(player_data.get('blk_per_poss', 0) or 0) * 100
-                tov_100 = float(player_data.get('tov_per_poss', 0) or 0) * 100
+                # Per-100 stats (already in per-100 format from Basketball Reference)
+                pts_100 = float(player_data.get('pts_per_poss', 0) or 0)
+                reb_100 = float(player_data.get('trb_per_poss', 0) or 0)
+                ast_100 = float(player_data.get('ast_per_poss', 0) or 0)
+                stl_100 = float(player_data.get('stl_per_poss', 0) or 0)
+                blk_100 = float(player_data.get('blk_per_poss', 0) or 0)
+                tov_100 = float(player_data.get('tov_per_poss', 0) or 0)
                 
                 # Shooting
                 ts_pct = float(player_data.get('ts_pct', 0) or 0)
@@ -222,7 +223,7 @@ class ComprehensiveBballRefScraper:
             print(f"   ❌ Failed: {response.status_code}")
             return 0
         
-        rows = self.parse_table_from_html(response.content, 'advanced_stats')
+        rows = self.parse_table_from_html(response.content, 'advanced')
         
         if not rows:
             print("   ❌ Could not find table")
@@ -233,7 +234,7 @@ class ComprehensiveBballRefScraper:
         updated = 0
         for player_data in rows:
             try:
-                player_name = player_data.get('player', '').strip()
+                player_name = player_data.get('name_display', '').strip()
                 player_id = self.player_map.get(player_name.lower())
                 
                 if not player_id:

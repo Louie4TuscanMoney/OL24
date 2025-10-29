@@ -20,7 +20,7 @@ const SchedulePage = lazy(() => import('./components/SchedulePage'));
 const TeamPage = lazy(() => import('./components/TeamPage'));
 const TeamsDirectory = lazy(() => import('./components/TeamsDirectory'));
 const GameDetailPage = lazy(() => import('./components/GameDetailPage'));
-const TradingDesk = lazy(() => import('./components/TradingDesk'));
+const TradingPage = lazy(() => import('./components/TradingPage'));
 
 const App: Component = () => {
   const [currentPage, setCurrentPage] = createSignal<'predictions' | 'stats' | 'schedule' | 'teams' | 'team' | 'game' | 'trading'>('predictions');
@@ -28,7 +28,6 @@ const App: Component = () => {
   const [selectedGame, setSelectedGame] = createSignal('');
   const [initialLoading, setInitialLoading] = createSignal(true);
   const [connected] = wsService.connected;
-  const [games] = wsService.games;
 
   // Hide loading screen after connection OR after 3 seconds max
   createEffect(() => {
@@ -184,7 +183,7 @@ const App: Component = () => {
           {currentPage() === 'teams' && <TeamsDirectory onTeamClick={(abbr) => navigate('team', abbr)} />}
           {currentPage() === 'team' && selectedTeam() && <TeamPage teamAbbr={selectedTeam()} />}
           {currentPage() === 'game' && selectedGame() && <GameDetailPage gameId={selectedGame()} />}
-          {currentPage() === 'trading' && <TradingDesk games={Array.from(games().values())} backendUrl={import.meta.env.VITE_BACKEND_URL || 'https://ol24-production.up.railway.app'} />}
+          {currentPage() === 'trading' && <TradingPage />}
         </Suspense>
       </Show>
     </div>

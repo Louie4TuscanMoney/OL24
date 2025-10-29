@@ -1,8 +1,11 @@
 """
 DAILY NBA DATA SCHEDULER
-Runs populate_comprehensive_nba_data.py every day at 3:30 AM UTC
+Runs update_from_espn_daily.py every day at 3:30 AM UTC
 
 This runs as a background thread in the main FastAPI app.
+Uses ESPN's hidden API for accurate stats (more reliable than nba_api).
+
+Pipeline: ESPN API → PostgreSQL → FastAPI → Frontend
 """
 
 import schedule
@@ -31,40 +34,28 @@ def run_daily_nba_update():
             print("❌ DATABASE_URL not set - skipping update")
             return
         
-        # Step 1: Update rosters from nba_api (still works for rosters)
-        print("\n📋 Step 1: Updating team rosters...")
-        result1 = subprocess.run(
-            ['python3', 'backend/services/populate_comprehensive_nba_data.py'],
-            env={**os.environ, 'DATABASE_URL': database_url},
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-        
-        if result1.returncode == 0:
-            print("   ✅ Rosters updated")
-        else:
-            print(f"   ⚠️  Roster update had issues (continuing...)")
-        
-        # Step 2: Scrape comprehensive stats from Basketball Reference
-        print("\n📊 Step 2: Scraping Basketball Reference stats...")
-        result2 = subprocess.run(
-            ['python3', 'backend/services/scrape_basketball_reference_all.py'],
+        # Main update: ESPN Comprehensive Pipeline (ALL data!)
+        print("\n🏀 Running ESPN Comprehensive Pipeline...")
+        result = subprocess.run(
+            ['python3', 'backend/services/espn_comprehensive_pipeline.py'],
             env={**os.environ, 'DATABASE_URL': database_url},
             capture_output=True,
             text=True,
             timeout=600
         )
         
-        print(result2.stdout)
+        print(result.stdout)
         
-        if result2.returncode == 0:
-            print("   ✅ Basketball Reference stats updated")
+        if result.returncode == 0:
+            print("   ✅ ESPN API update successful")
         else:
-            print(f"   ❌ Basketball Reference scrape failed")
-            print(result2.stderr)
+            print(f"   ❌ ESPN API update failed")
+            print(result.stderr)
         
-        print("\n✅ Daily NBA update completed!")
+        print("\n" + "="*80)
+        print("✅ DAILY UPDATE COMPLETE")
+        print("   Pipeline: ESPN API → PostgreSQL → FastAPI → Frontend")
+        print("="*80)
             
     except Exception as e:
         print(f"❌ Error running daily NBA update: {e}")
