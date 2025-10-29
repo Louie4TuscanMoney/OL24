@@ -37,6 +37,8 @@ class GameData(TypedDict):
     is_live: bool
     status: int
     status_text: str
+    game_time: str  # When the game starts (e.g., "7:00 PM ET")
+    game_date: str  # Date of game (e.g., "Oct 28, 2025")
     is_q2_6min: bool
     can_predict: bool
     timestamp: str
@@ -209,6 +211,11 @@ class ESPNAPIClient:
             home_score = int(home.get('score', 0) or 0)
             away_score = int(away.get('score', 0) or 0)
             
+            # Extract game time and date
+            game_date_obj = datetime.fromisoformat(event.get('date', '').replace('Z', '+00:00'))
+            game_time = game_date_obj.strftime('%I:%M %p ET')  # e.g., "07:00 PM ET"
+            game_date = game_date_obj.strftime('%b %d, %Y')    # e.g., "Oct 28, 2025"
+            
             # Force LIVE if started
             if status_id == 1 and (home_score > 0 or away_score > 0 or period > 0):
                 status_id = 2
@@ -226,6 +233,8 @@ class ESPNAPIClient:
                 'is_live': status_id == 2,
                 'status': status_id,
                 'status_text': self._status_text(status_id, period, clock),
+                'game_time': game_time,
+                'game_date': game_date,
                 'is_q2_6min': self._is_q2_6min(period, clock),
                 'can_predict': status_id == 2 and period >= 2,
                 'timestamp': datetime.now().isoformat()

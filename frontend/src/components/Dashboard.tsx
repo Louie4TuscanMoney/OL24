@@ -148,7 +148,7 @@ const Dashboard: Component<DashboardProps> = (props) => {
               <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-white">Live Games</h1>
               <p class="text-sm md:text-base text-gray-400 mt-1">Real-time analytics for sports traders</p>
             </div>
-            
+
             {/* Status Pills */}
             <div class="flex flex-wrap gap-3">
               <div class="px-4 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl backdrop-blur-sm">
@@ -160,7 +160,7 @@ const Dashboard: Component<DashboardProps> = (props) => {
               <Show when={edgesCount() > 0}>
                 <div class="px-4 py-2.5 bg-green-500/10 border border-green-500/20 rounded-xl backdrop-blur-sm">
                   <span class="text-green-400 font-semibold text-sm">{edgesCount()} Edges</span>
-                </div>
+              </div>
               </Show>
             </div>
           </div>
@@ -198,6 +198,9 @@ const Dashboard: Component<DashboardProps> = (props) => {
                       <div class="flex items-center gap-2">
                         <div class="w-2 h-2 bg-red-500 rounded-full live-pulse"></div>
                         <span class="text-red-500 font-bold text-xs uppercase tracking-wider">Live</span>
+                        <Show when={game.game_date}>
+                          <span class="text-gray-500 text-xs">• {game.game_date}</span>
+                        </Show>
                       </div>
                       <div class="text-gray-300 text-sm font-medium">
                         Q{game.quarter} • {game.time_remaining || game.clock || 'Live'}
@@ -334,15 +337,15 @@ const Dashboard: Component<DashboardProps> = (props) => {
                       <div class="mt-4 pt-4 border-t border-gray-800">
                         <div class="text-center text-gray-500 text-xs">
                           {game.quarter >= 2 ? '⏳ Waiting for Q2 6:00 prediction window...' : '🏀 Collecting play-by-play data...'}
-                        </div>
-                      </div>
-                    </Show>
+            </div>
+          </div>
+        </Show>
 
                     {/* Click hint */}
                     <div class="mt-4 pt-3 border-t border-gray-800 text-center">
                       <span class="text-gray-500 text-xs">Click for full game analysis →</span>
                     </div>
-                  </div>
+              </div>
                 )}
               </For>
             </div>
@@ -358,14 +361,20 @@ const Dashboard: Component<DashboardProps> = (props) => {
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <For each={upcomingGames()}>
-                {(game) => (
+                  {(game) => (
                   <div 
                     onClick={() => handleGameClick(game.game_id)}
                     class="modern-card cursor-pointer hover:border-blue-500/40 transition-all duration-300"
                   >
                     <div class="text-center mb-4 pb-4 border-b border-gray-800">
                       <div class="text-blue-400 text-xs font-semibold uppercase mb-2">Scheduled</div>
-                      <div class="text-sm text-gray-400">Game ID: {game.game_id}</div>
+                      <Show when={game.game_date && game.game_time}>
+                        <div class="text-sm text-white font-medium mb-1">{game.game_date}</div>
+                        <div class="text-sm text-gray-400">{game.game_time}</div>
+                      </Show>
+                      <Show when={!game.game_date}>
+                        <div class="text-xs text-gray-500">Game ID: {game.game_id}</div>
+                      </Show>
                     </div>
 
                     {/* Teams */}
@@ -408,8 +417,8 @@ const Dashboard: Component<DashboardProps> = (props) => {
                       <span class="text-gray-500 text-xs">Click for pre-game analysis →</span>
                     </div>
                   </div>
-                )}
-              </For>
+                  )}
+                </For>
             </div>
           </section>
         </Show>

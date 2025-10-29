@@ -15,6 +15,8 @@ export interface NBAGame {
   time_remaining: string;
   clock?: string; // Railway sends this field
   is_live: boolean;
+  game_time?: string; // When game starts (e.g., "07:00 PM ET")
+  game_date?: string; // Date of game (e.g., "Oct 28, 2025")
 }
 
 // ML Prediction from Ensemble
