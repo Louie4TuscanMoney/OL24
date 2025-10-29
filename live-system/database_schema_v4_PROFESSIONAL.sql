@@ -188,6 +188,14 @@ CREATE TABLE IF NOT EXISTS player_box_scores (
     plus_minus INT,
     team_poss DECIMAL(10,2),
     
+    -- Per-100 Stats (REAL - calculated from team_poss)
+    pts_100 DECIMAL(7,2),
+    reb_100 DECIMAL(7,2),
+    ast_100 DECIMAL(7,2),
+    stl_100 DECIMAL(7,2),
+    blk_100 DECIMAL(7,2),
+    tov_100 DECIMAL(7,2),
+    
     -- Metadata
     created_at TIMESTAMP DEFAULT NOW(),
     
@@ -275,7 +283,8 @@ CREATE TABLE IF NOT EXISTS player_season_stats (
         CASE WHEN games_played > 0 THEN minutes_total / CAST(games_played AS DECIMAL) ELSE 0 END
     ) STORED,
     
-    -- Per-100 Possessions (computed separately - stored values)
+    -- Per-100 Possessions (REAL - from boxscoreadvancedv2)
+    total_team_possessions INT,  -- Sum of team possessions across all games
     pts_100 DECIMAL(7,2),
     reb_100 DECIMAL(7,2),
     ast_100 DECIMAL(7,2),
