@@ -14,7 +14,12 @@ from datetime import datetime
 
 
 def run_daily_nba_update():
-    """Run the NBA data population script"""
+    """
+    Run the NBA data population scripts
+    
+    Uses Basketball Reference (reliable, comprehensive) instead of nba_api
+    (nba_api is broken for 2025-26 season)
+    """
     print("\n" + "="*80)
     print(f"🕒 DAILY NBA UPDATE STARTED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
     print("="*80)
@@ -26,23 +31,40 @@ def run_daily_nba_update():
             print("❌ DATABASE_URL not set - skipping update")
             return
         
-        # Run the populate script
-        result = subprocess.run(
+        # Step 1: Update rosters from nba_api (still works for rosters)
+        print("\n📋 Step 1: Updating team rosters...")
+        result1 = subprocess.run(
             ['python3', 'backend/services/populate_comprehensive_nba_data.py'],
             env={**os.environ, 'DATABASE_URL': database_url},
             capture_output=True,
             text=True,
-            timeout=600  # 10 minute timeout
+            timeout=300
         )
         
-        print(result.stdout)
-        if result.stderr:
-            print("STDERR:", result.stderr)
-        
-        if result.returncode == 0:
-            print("✅ Daily NBA update completed successfully")
+        if result1.returncode == 0:
+            print("   ✅ Rosters updated")
         else:
-            print(f"❌ Daily NBA update failed with code {result.returncode}")
+            print(f"   ⚠️  Roster update had issues (continuing...)")
+        
+        # Step 2: Scrape comprehensive stats from Basketball Reference
+        print("\n📊 Step 2: Scraping Basketball Reference stats...")
+        result2 = subprocess.run(
+            ['python3', 'backend/services/scrape_basketball_reference_all.py'],
+            env={**os.environ, 'DATABASE_URL': database_url},
+            capture_output=True,
+            text=True,
+            timeout=600
+        )
+        
+        print(result2.stdout)
+        
+        if result2.returncode == 0:
+            print("   ✅ Basketball Reference stats updated")
+        else:
+            print(f"   ❌ Basketball Reference scrape failed")
+            print(result2.stderr)
+        
+        print("\n✅ Daily NBA update completed!")
             
     except Exception as e:
         print(f"❌ Error running daily NBA update: {e}")

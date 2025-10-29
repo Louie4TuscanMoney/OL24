@@ -296,6 +296,15 @@ CREATE TABLE IF NOT EXISTS player_season_stats (
     rapm DECIMAL(7,3),  -- Regularized Adjusted Plus-Minus
     lebron DECIMAL(7,3),  -- Our composite metric
     bpm DECIMAL(7,3),  -- Box Plus-Minus
+    obpm DECIMAL(7,3),  -- Offensive BPM
+    dbpm DECIMAL(7,3),  -- Defensive BPM
+    vorp DECIMAL(7,3),  -- Value Over Replacement Player
+    
+    -- Advanced Metrics (from Basketball Reference)
+    per DECIMAL(7,2),  -- Player Efficiency Rating
+    usage_pct DECIMAL(5,3),  -- Usage Percentage
+    win_shares DECIMAL(7,2),  -- Win Shares
+    win_shares_48 DECIMAL(7,3),  -- Win Shares per 48 minutes
     
     -- Metadata
     updated_at TIMESTAMP DEFAULT NOW(),
