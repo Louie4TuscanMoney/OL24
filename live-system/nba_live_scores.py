@@ -58,12 +58,12 @@ class NBALiveScores:
         self._last_valid_timestamp = 0
         self._cache_max_age = 5  # ⚡ Cache valid for only 5 seconds (ultra-fresh data!)
         
-        print(f"✅ NBA API initialized: live.scoreboard (Official NBA.com)")
-        print(f"   Using: nba_api.live.nba.endpoints.scoreboard")
-        print(f"   Endpoint: cdn.nba.com (has ~30s cache but WORKS!)")
-        print(f"   Retry logic: 3 attempts if fails, uses last valid data")
+        print(f"✅ NBA API initialized: MULTI-SOURCE FRESHNESS STRATEGY")
+        print(f"   Sources: nba_api + ESPN (fetched simultaneously)")
+        print(f"   Strategy: Compare all sources, use HIGHEST score (= freshest)")
+        print(f"   Logic: If nba_api shows 68-72 but ESPN shows 70-74, use ESPN")
         print(f"   Force refresh: EVERY WebSocket call (1/sec)")
-        print(f"   Note: 30s lag accepted - scoreboardv2 was showing wrong data!")
+        print(f"   Result: Always use the freshest available data!")
         
     def get_todays_games(self, force_refresh: bool = False) -> List[Dict]:
         """
@@ -85,54 +85,100 @@ class NBALiveScores:
             self._last_espn_api_call = 0  # Reset to force ESPN call
             self._last_nba_api_call = 0
         
-        # ONLY METHOD: live.scoreboard (NBA.com official - reliable!)
-        # scoreboardv2 was showing scheduled games as 0-0 even when live!
+        # MULTI-SOURCE STRATEGY: Fetch from ALL sources, use FRESHEST!
+        # This eliminates lag by comparing multiple sources
+        
+        all_sources = []
+        
+        # SOURCE 1: nba_api live.scoreboard
         if NBA_API_AVAILABLE:
-            max_retries = 3
-            retry_count = 0
-            while retry_count < max_retries:
-                try:
-                    if retry_count > 0:
-                        print(f"🔄 Retry {retry_count}/{max_retries}...")
-                        time.sleep(0.5)
+            try:
+                print(f"⚡ Fetching from nba_api...")
+                board = scoreboard.ScoreBoard()
+                games_data = board.get_dict()
+                
+                if games_data and 'scoreboard' in games_data and 'games' in games_data['scoreboard']:
+                    nba_games = []
+                    for game in games_data['scoreboard']['games']:
+                        parsed = self._parse_nba_api_game(game)
+                        if parsed:
+                            nba_games.append(parsed)
                     
-                    print(f"⚡ NBA_API LIVE.SCOREBOARD (Official NBA.com)")
-                    board = scoreboard.ScoreBoard()
-                    games_data = board.get_dict()
-                    
-                    games = []
-                    if games_data and 'scoreboard' in games_data and 'games' in games_data['scoreboard']:
-                        for game in games_data['scoreboard']['games']:
-                            parsed = self._parse_nba_api_game(game)
-                            if parsed:
-                                games.append(parsed)
-                    
-                    if games:
-                        for game in games:
-                            print(f"   NBA: {game['away_team']} @ {game['home_team']}: {game['away_score']}-{game['home_score']} | Q{game['period']} {game['clock']} | {game['status_text']}")
-                        
-                        print(f"✅ NBA_API SUCCESS: {len(games)} games")
-                        self._last_valid_games = games
-                        self._last_valid_timestamp = now
-                        return games
-                    else:
-                        retry_count += 1
-                        continue
-                        
-                except Exception as e:
-                    retry_count += 1
-                    print(f"⚠️ nba_api error (attempt {retry_count}/{max_retries}): {type(e).__name__} - {str(e)}")
-                    if retry_count >= max_retries:
-                        break
+                    if nba_games:
+                        all_sources.append(('nba_api', nba_games))
+                        print(f"   ✅ nba_api: {len(nba_games)} games")
+            except Exception as e:
+                print(f"   ❌ nba_api failed: {e}")
+        
+        # SOURCE 2: ESPN API
+        try:
+            print(f"⚡ Fetching from ESPN...")
+            response = requests.get(
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+                headers=self.headers,
+                timeout=2
+            )
+            if response.status_code == 200:
+                data = response.json()
+                espn_games = []
+                
+                if 'events' in data:
+                    for event in data['events']:
+                        parsed = self._parse_espn_game(event)
+                        if parsed:
+                            espn_games.append(parsed)
+                
+                if espn_games:
+                    all_sources.append(('espn', espn_games))
+                    print(f"   ✅ ESPN: {len(espn_games)} games")
+        except Exception as e:
+            print(f"   ❌ ESPN failed: {e}")
+        
+        # PICK THE FRESHEST DATA (highest score = most recent)
+        if all_sources:
+            print(f"\n🔍 Comparing {len(all_sources)} sources for freshest data...")
             
-            # If all retries failed, return last valid data
-            if self._last_valid_games:
-                age = now - self._last_valid_timestamp
-                print(f"⚠️ All retries failed - using cache ({age:.1f}s old)")
-                return self._last_valid_games
-            else:
-                print(f"🚨 No data available - will retry on next call")
-                return []
+            # For each game, pick the source with highest total score (= most recent)
+            final_games = []
+            game_ids = set()
+            
+            # Collect all game IDs
+            for source_name, games in all_sources:
+                for game in games:
+                    game_ids.add(game['game_id'])
+            
+            # For each game, pick freshest version
+            for game_id in game_ids:
+                freshest = None
+                freshest_source = None
+                max_score = -1
+                
+                for source_name, games in all_sources:
+                    game = next((g for g in games if g['game_id'] == game_id), None)
+                    if game:
+                        total_score = game.get('home_score', 0) + game.get('away_score', 0)
+                        if total_score > max_score or freshest is None:
+                            max_score = total_score
+                            freshest = game
+                            freshest_source = source_name
+                
+                if freshest:
+                    print(f"   📊 {freshest['away_team']} @ {freshest['home_team']}: Using {freshest_source} ({freshest['away_score']}-{freshest['home_score']})")
+                    final_games.append(freshest)
+            
+            print(f"\n✅ FRESHEST DATA: {len(final_games)} games")
+            self._last_valid_games = final_games
+            self._last_valid_timestamp = now
+            return final_games
+        
+        # Fallback to cache
+        if self._last_valid_games:
+            age = now - self._last_valid_timestamp
+            print(f"⚠️ All sources failed - using cache ({age:.1f}s old)")
+            return self._last_valid_games
+        else:
+            print(f"🚨 No data available")
+            return []
         
         # NO FALLBACKS - Only NBA.com official API!
         # If nba_api not available, return last valid data

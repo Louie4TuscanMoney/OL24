@@ -5,10 +5,10 @@
       "matchup": "PHI @ WAS",
       "current_score": "68-72",
       "period": "Q2 PT00M00.00S",
-      "prediction": 0.10496272922450078,
+      "prediction": 3.815490782537446,
       "market_spread": 1.2,
       "favorite": "PHI +1.2",
-      "edge": 1.0950372707754992,
+      "edge": 2.615490782537446,
       "p_win": 0.5,
       "kelly_edge": 0.0,
       "bet_recommended": false,
@@ -17,25 +17,25 @@
       "recommended_stake": 0.0,
       "reason": "Standalone mode",
       "confidence_interval": [
-        -4.895037270775499,
-        5.104962729224501
+        -1.184509217462554,
+        8.815490782537445
       ],
       "american_odds_home": 105,
       "american_odds_away": -115,
       "implied_prob_home": 0.4878,
       "implied_prob_away": 0.5349,
       "vig_percentage": 2.27,
-      "timestamp": "2025-10-28T17:25:00.813802"
+      "timestamp": "2025-10-28T17:30:41.394641"
     },
     {
       "game_id": "0022500124",
       "matchup": "CHA @ MIA",
       "current_score": "44-50",
       "period": "Q2 PT08M27.00S",
-      "prediction": 5.841576813157763,
+      "prediction": 6.761938828291003,
       "market_spread": 1.8,
       "favorite": "CHA +1.8",
-      "edge": 4.041576813157763,
+      "edge": 4.961938828291003,
       "p_win": 0.5,
       "kelly_edge": 0.0,
       "bet_recommended": false,
@@ -44,17 +44,17 @@
       "recommended_stake": 0.0,
       "reason": "Standalone mode",
       "confidence_interval": [
-        0.8415768131577632,
-        10.841576813157763
+        1.7619388282910027,
+        11.761938828291003
       ],
       "american_odds_home": 105,
       "american_odds_away": -115,
       "implied_prob_home": 0.4878,
       "implied_prob_away": 0.5349,
       "vig_percentage": 2.27,
-      "timestamp": "2025-10-28T17:25:00.824373"
+      "timestamp": "2025-10-28T17:30:41.413735"
     }
   ],
-  "timestamp": "2025-10-28T17:25:00.824887",
+  "timestamp": "2025-10-28T17:30:41.413999",
   "count": 2
 }
