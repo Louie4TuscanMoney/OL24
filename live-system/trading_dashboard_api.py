@@ -1264,14 +1264,14 @@ def _calculate_consistency(games):
 
 @app.get("/api/stats/teams")
 async def get_all_teams():
-    """Get all 30 NBA teams with stats computed from player box scores"""
+    """Get all 30 NBA teams with stats from team_season_stats table"""
     conn = get_db_connection()
     if not conn:
         return {"error": "Database not configured", "teams": [], "count": 0}
     
     try:
         cursor = conn.cursor()
-        # Compute team stats ON THE FLY from player box scores
+        # Get team stats from team_season_stats table
         cursor.execute("""
             SELECT 
                 t.team_id,
@@ -1280,25 +1280,18 @@ async def get_all_teams():
                 t.logo_url,
                 t.primary_color,
                 t.secondary_color,
-                COUNT(DISTINCT pb.game_id) as games_played,
-                -- Compute wins/losses from game results
-                COALESCE(SUM(CASE WHEN pb.plus_minus > 0 THEN 1 ELSE 0 END) / NULLIF(COUNT(DISTINCT pb.game_id), 0), 0) as win_pct,
-                -- Team stats from player aggregates
-                COALESCE(SUM(pb.pts)::float / NULLIF(COUNT(DISTINCT pb.game_id), 0), 0) as ppg,
-                COALESCE(AVG(pb.team_poss), 0) as avg_poss
+                COALESCE(tss.games_played, 0) as games_played,
+                COALESCE(tss.wins, 0) as wins,
+                COALESCE(tss.losses, 0) as losses,
+                COALESCE(tss.ppg, 0) as ppg,
+                COALESCE(tss.net_rating, 0) as net_rating
             FROM teams t
-            LEFT JOIN player_box_scores pb ON pb.team_id = t.team_id AND pb.season_id = '2025-26'
-            GROUP BY t.team_id, t.abbreviation, t.full_name, t.logo_url, t.primary_color, t.secondary_color
-            ORDER BY ppg DESC NULLS LAST
+            LEFT JOIN team_season_stats tss ON t.team_id = tss.team_id AND tss.season_id = '2025-26'
+            ORDER BY tss.wins DESC NULLS LAST, t.abbreviation
         """)
         
         teams_list = []
         for row in cursor.fetchall():
-            games = int(row[6]) if row[6] else 0
-            ppg = float(row[8]) if row[8] else 0
-            wins = int(games * float(row[7])) if row[7] and games > 0 else 0
-            losses = games - wins
-            
             teams_list.append({
                 "team_id": row[0],
                 "abbreviation": row[1],
@@ -1306,11 +1299,11 @@ async def get_all_teams():
                 "logo_url": row[3],
                 "primary_color": row[4],
                 "secondary_color": row[5],
-                "games_played": games,
-                "wins": wins,
-                "losses": losses,
-                "ppg": round(ppg, 1),
-                "net_rating": 0  # Placeholder - need opponent stats to compute
+                "games_played": int(row[6]),
+                "wins": int(row[7]),
+                "losses": int(row[8]),
+                "ppg": round(float(row[9]), 1),
+                "net_rating": round(float(row[10]), 1)
             })
         
         conn.close()
@@ -1383,11 +1376,12 @@ async def get_player_profile(player_id: str):
                 p.draft_year, p.draft_round, p.draft_number, p.college,
                 t.abbreviation, t.full_name AS team_name, t.logo_url, 
                 t.primary_color, t.secondary_color,
-                pss.gp, pss.ppg, pss.rpg, pss.apg,
+                pss.games_played, pss.ppg, pss.rpg, pss.apg,
                 pss.fg_pct, pss.fg3_pct, pss.ft_pct,
                 pss.ts_pct, pss.efg_pct,
                 pss.pts_100, pss.reb_100, pss.ast_100,
                 pss.pts_36, pss.reb_36, pss.ast_36,
+                pss.bpm, pss.per, pss.vorp, pss.usage_pct, pss.win_shares,
                 pss.lebron_total, pss.lebron_offense, pss.lebron_defense,
                 pss.rapm_total
             FROM players p
@@ -1482,7 +1476,7 @@ async def get_player_profile(player_id: str):
                 "ft_pct": float(row[29]) if row[29] else 0
             },
             
-            # Advanced Stats (Self-Computed!)
+            # Advanced Stats (from Basketball Reference + custom metrics)
             "advanced_stats": {
                 "ts_pct": float(row[30]) if row[30] else 0,
                 "efg_pct": float(row[31]) if row[31] else 0,
@@ -1492,10 +1486,15 @@ async def get_player_profile(player_id: str):
                 "pts_36": float(row[35]) if row[35] else 0,
                 "reb_36": float(row[36]) if row[36] else 0,
                 "ast_36": float(row[37]) if row[37] else 0,
-                "lebron": float(row[38]) if row[38] else 0,
-                "lebron_offense": float(row[39]) if row[39] else 0,
-                "lebron_defense": float(row[40]) if row[40] else 0,
-                "rapm": float(row[41]) if row[41] else 0
+                "bpm": float(row[38]) if row[38] else 0,
+                "per": float(row[39]) if row[39] else 0,
+                "vorp": float(row[40]) if row[40] else 0,
+                "usage_pct": float(row[41]) if row[41] else 0,
+                "win_shares": float(row[42]) if row[42] else 0,
+                "lebron": float(row[43]) if row[43] else 0,
+                "lebron_offense": float(row[44]) if row[44] else 0,
+                "lebron_defense": float(row[45]) if row[45] else 0,
+                "rapm": float(row[46]) if row[46] else 0
             },
             
             # Last 10 Games
