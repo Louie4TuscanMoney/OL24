@@ -1065,6 +1065,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # Check if WebSocket is still open before sending
                 if websocket.client_state.value == 1:  # 1 = OPEN
+                    # Log what we're sending (for debugging)
+                    game_count = len(message.get('games', []))
+                    pred_count = len(message.get('opportunities', []))
+                    print(f"📤 WebSocket send: {game_count} games, {pred_count} predictions")
+                    
+                    # Log live game details
+                    for game in message.get('games', []):
+                        if game.get('is_live'):
+                            print(f"   🔴 {game['away_team']} @ {game['home_team']}: {game['score_away']}-{game['score_home']} | Q{game['quarter']} {game['time_remaining']}")
+                    
                     await websocket.send_json(message)
                 else:
                     print(f"⚠️ WebSocket closed, ending loop")
@@ -1120,7 +1130,28 @@ async def build_complete_message() -> dict:
             # FILTER: Only show LIVE games OR today's games (not yesterday's finals!)
             from datetime import date
             today_str = date.today().strftime('%Y-%m-%d')
-            live_games = [g for g in all_games if g.get('is_live') or g.get('status') != 3]
+            
+            # Map to frontend format (crucial!)
+            live_games = []
+            for g in all_games:
+                if g.get('status') == 3:  # Skip finished games
+                    continue
+                
+                # Map backend format to frontend format
+                game_mapped = {
+                    'game_id': g.get('game_id'),
+                    'home_team': g.get('home_team'),
+                    'away_team': g.get('away_team'),
+                    'score_home': g.get('home_score', 0),  # Frontend expects score_home
+                    'score_away': g.get('away_score', 0),  # Frontend expects score_away
+                    'quarter': g.get('period', 0),  # Frontend expects quarter
+                    'time_remaining': g.get('clock', ''),  # Frontend expects time_remaining
+                    'clock': g.get('clock', ''),  # Also include clock
+                    'is_live': g.get('status') == 2,  # Frontend expects is_live
+                    'status': g.get('status', 1),
+                    'status_text': g.get('status_text', '')
+                }
+                live_games.append(game_mapped)
         else:
             live_games = []
         
@@ -1149,11 +1180,14 @@ async def build_complete_message() -> dict:
         }
         
         # Build complete message
+        # Frontend expects 'games' not 'live_games'!
         message = {
             "type": "update",
             "timestamp": datetime.now().isoformat(),
-            "live_games": live_games,
+            "games": live_games,  # Frontend expects this field name!
+            "live_games": live_games,  # Keep for backward compat
             "opportunities": opportunities,
+            "predictions": opportunities,  # Frontend might expect this
             "system_status": system_status
         }
         

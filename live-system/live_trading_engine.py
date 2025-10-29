@@ -473,20 +473,32 @@ class LiveTradingEngine:
                 print(f"❌ Model is not a dict! Type: {type(self.model)}")
                 return None
             
-            if 'model' not in self.model:
-                print(f"❌ 'model' key not found in model dict!")
+            # Use branch_b_final for final score prediction
+            if 'branch_b_final' not in self.model:
+                print(f"❌ 'branch_b_final' key not found in model dict!")
                 print(f"   Available keys: {list(self.model.keys())}")
                 return None
             
+            print(f"✅ Using branch_b_final for final spread prediction")
+            
+            # branch_b_final should have 'model' and 'scaler' inside
+            branch_b = self.model['branch_b_final']
+            
             # Scale features if scaler exists
-            if self.model.get('scaler'):
-                X = self.model['scaler'].transform(features.reshape(1, -1))
-            else:
+            if isinstance(branch_b, dict) and 'scaler' in branch_b:
+                X = branch_b['scaler'].transform(features.reshape(1, -1))
+                predictor = branch_b['model']
+            elif isinstance(branch_b, dict) and 'model' in branch_b:
                 X = features.reshape(1, -1)
+                predictor = branch_b['model']
+            else:
+                # branch_b IS the model itself
+                X = features.reshape(1, -1)
+                predictor = branch_b
             
             # Make prediction
-            prediction = self.model['model'].predict(X)[0]
-            print(f"✅ MAMBA PREDICTION: {prediction:.2f}")
+            prediction = predictor.predict(X)[0]
+            print(f"✅ MAMBA PREDICTION: {prediction:.2f} points")
             
         except Exception as e:
             print(f"❌ Prediction error: {e}")
