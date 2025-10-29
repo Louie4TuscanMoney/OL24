@@ -16,9 +16,8 @@ from typing import Dict, List, Optional
 import json
 
 try:
-    # Use STATS endpoints (real-time) instead of LIVE endpoints (CDN cached!)
-    from nba_api.stats.endpoints import scoreboardv2
-    from nba_api.live.nba.endpoints import scoreboard as live_scoreboard
+    # Use live.scoreboard - it WORKS and gets live data
+    from nba_api.live.nba.endpoints import scoreboard
     NBA_API_AVAILABLE = True
 except ImportError:
     NBA_API_AVAILABLE = False
@@ -32,20 +31,9 @@ class NBALiveScores:
     
     def __init__(self):
         """Initialize NBA live score fetcher using official nba_api library"""
-        # Using official nba_api library - STATE OF THE ART! ✅
-        # This gets REAL-TIME data directly from NBA stats
+        # Using official nba_api library - live.scoreboard
+        # Has ~30s CDN cache but WORKS and shows live games correctly
         self.use_nba_api = NBA_API_AVAILABLE
-        
-        # DIRECT NBA.com endpoint (NO CDN CACHE!)
-        # This is the REAL-TIME endpoint, not cached
-        today = datetime.now().strftime('%Y%m%d')
-        self.scoreboard_url_direct = f"https://stats.nba.com/stats/scoreboardv3?GameDate={today}&LeagueID=00"
-        
-        # ESPN API endpoint (backup)
-        self.scoreboard_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-        
-        # CDN endpoint (last resort - has 30-60s cache)
-        self.scoreboard_url_cdn = "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
         
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -70,12 +58,12 @@ class NBALiveScores:
         self._last_valid_timestamp = 0
         self._cache_max_age = 5  # ⚡ Cache valid for only 5 seconds (ultra-fresh data!)
         
-        print(f"✅ NBA API initialized: scoreboardv2 STATS endpoint (REAL-TIME!)")
-        print(f"   Using: nba_api.stats.endpoints.scoreboardv2")
-        print(f"   Endpoint: stats.nba.com (NOT CDN - no caching!)")
+        print(f"✅ NBA API initialized: live.scoreboard (Official NBA.com)")
+        print(f"   Using: nba_api.live.nba.endpoints.scoreboard")
+        print(f"   Endpoint: cdn.nba.com (has ~30s cache but WORKS!)")
         print(f"   Retry logic: 3 attempts if fails, uses last valid data")
         print(f"   Force refresh: EVERY WebSocket call (1/sec)")
-        print(f"   Result: Fastest possible NBA.com data - bypasses all CDN caching!")
+        print(f"   Note: 30s lag accepted - scoreboardv2 was showing wrong data!")
         
     def get_todays_games(self, force_refresh: bool = False) -> List[Dict]:
         """
@@ -97,95 +85,33 @@ class NBALiveScores:
             self._last_espn_api_call = 0  # Reset to force ESPN call
             self._last_nba_api_call = 0
         
-        # METHOD 1: DIRECT stats.nba.com (FASTEST - NO CDN CACHE!)
-        # This bypasses CDN caching and gets real-time data
-        max_retries = 3
-        retry_count = 0
-        
-        while retry_count < max_retries:
-            try:
-                if retry_count > 0:
-                    print(f"🔄 Retry {retry_count}/{max_retries}...")
-                    time.sleep(0.3)
-                
-                print(f"⚡ DIRECT NBA.COM STATS API (NO CDN!)")
-                
-                # Try stats.nba.com FIRST (real-time, no cache)
-                stats_headers = {
-                    **self.headers,
-                    'Referer': 'https://www.nba.com/',
-                    'Origin': 'https://www.nba.com'
-                }
-                
-                response = requests.get(self.scoreboard_url_direct, headers=stats_headers, timeout=2)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    games = []
+        # ONLY METHOD: live.scoreboard (NBA.com official - reliable!)
+        # scoreboardv2 was showing scheduled games as 0-0 even when live!
+        if NBA_API_AVAILABLE:
+            max_retries = 3
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    if retry_count > 0:
+                        print(f"🔄 Retry {retry_count}/{max_retries}...")
+                        time.sleep(0.5)
                     
-                    # Parse stats.nba.com format
-                    if 'scoreboard' in data and 'games' in data['scoreboard']:
-                        for game in data['scoreboard']['games']:
-                            parsed = self._parse_stats_nba_game(game)
+                    print(f"⚡ NBA_API LIVE.SCOREBOARD (Official NBA.com)")
+                    board = scoreboard.ScoreBoard()
+                    games_data = board.get_dict()
+                    
+                    games = []
+                    if games_data and 'scoreboard' in games_data and 'games' in games_data['scoreboard']:
+                        for game in games_data['scoreboard']['games']:
+                            parsed = self._parse_nba_api_game(game)
                             if parsed:
                                 games.append(parsed)
                     
                     if games:
                         for game in games:
-                            print(f"   STATS.NBA: {game['away_team']} @ {game['home_team']}: {game['away_score']}-{game['home_score']} | Q{game['period']} {game['clock']} | {game['status_text']}")
+                            print(f"   NBA: {game['away_team']} @ {game['home_team']}: {game['away_score']}-{game['home_score']} | Q{game['period']} {game['clock']} | {game['status_text']}")
                         
-                        print(f"✅ DIRECT NBA.COM SUCCESS: {len(games)} games (REAL-TIME!)")
-                        self._last_valid_games = games
-                        self._last_valid_timestamp = now
-                        return games
-                else:
-                    print(f"   stats.nba.com returned {response.status_code}, trying nba_api library...")
-                    raise Exception(f"HTTP {response.status_code}")
-                    
-            except Exception as e:
-                print(f"   Direct API failed: {e}, trying nba_api library...")
-                break  # Fall through to nba_api library
-        
-        # METHOD 2: scoreboardv2 STATS endpoint (REAL-TIME, no CDN!)
-        # This is the FASTEST nba_api method - hits stats.nba.com directly
-        if NBA_API_AVAILABLE:
-            retry_count = 0
-            while retry_count < max_retries:
-                try:
-                    if retry_count > 0:
-                        print(f"🔄 Retry {retry_count}/{max_retries} for scoreboardv2...")
-                        time.sleep(0.5)
-                    
-                    print(f"⚡ SCOREBOARDV2 (stats.nba.com - REAL-TIME!)")
-                    
-                    # Use scoreboardv2 with DayOffset=0 for TODAY (real-time!)
-                    board = scoreboardv2.ScoreboardV2(
-                        game_date=datetime.now().strftime('%Y-%m-%d'),
-                        day_offset=0,
-                        league_id='00'
-                    )
-                    
-                    # Get data as dict
-                    result_sets = board.get_dict()
-                    games = []
-                    
-                    # scoreboardv2 returns multiple result sets
-                    if 'resultSets' in result_sets:
-                        # GameHeader has the main game info
-                        game_header = next((rs for rs in result_sets['resultSets'] if rs['name'] == 'GameHeader'), None)
-                        line_score = next((rs for rs in result_sets['resultSets'] if rs['name'] == 'LineScore'), None)
-                        
-                        if game_header and 'rowSet' in game_header:
-                            for game_row in game_header['rowSet']:
-                                parsed = self._parse_scoreboardv2_game(game_row, line_score)
-                                if parsed:
-                                    games.append(parsed)
-                    
-                    if games:
-                        for game in games:
-                            print(f"   SCOREBOARDV2: {game['away_team']} @ {game['home_team']}: {game['away_score']}-{game['home_score']} | Q{game['period']} {game['clock']} | {game['status_text']}")
-                        
-                        print(f"✅ SCOREBOARDV2 SUCCESS: {len(games)} games (REAL-TIME stats.nba.com!)")
+                        print(f"✅ NBA_API SUCCESS: {len(games)} games")
                         self._last_valid_games = games
                         self._last_valid_timestamp = now
                         return games
@@ -195,7 +121,7 @@ class NBALiveScores:
                         
                 except Exception as e:
                     retry_count += 1
-                    print(f"⚠️ scoreboardv2 error (attempt {retry_count}/{max_retries}): {type(e).__name__} - {str(e)}")
+                    print(f"⚠️ nba_api error (attempt {retry_count}/{max_retries}): {type(e).__name__} - {str(e)}")
                     if retry_count >= max_retries:
                         break
             
