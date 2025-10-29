@@ -53,22 +53,60 @@ def main():
 
 
 def fetch_all_games():
-    """Fetch ALL games (live + completed) from NBA scoreboard using nba_api"""
+    """Fetch ALL games (live + completed) from ESPN API"""
     try:
-        from nba_api.live.nba.endpoints import scoreboard
+        # Use ESPN API (most reliable and fast)
+        espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+        response = requests.get(espn_url, timeout=10)
         
-        # Use nba_api library (same as /api/live-games endpoint)
-        games_data = scoreboard.ScoreBoard()
-        games_dict = games_data.get_dict()
+        if response.status_code != 200:
+            print(f"   ⚠️  ESPN API returned {response.status_code}")
+            return []
         
-        games = games_dict.get('scoreboard', {}).get('games', [])
+        data = response.json()
+        espn_events = data.get('events', [])
         
-        print(f"   📡 Fetched {len(games)} games from nba_api")
+        # Map ESPN format to our expected format (similar to nba_api structure)
+        games = []
+        for event in espn_events:
+            competition = event.get('competitions', [{}])[0]
+            status = event.get('status', {})
+            competitors = competition.get('competitors', [])
+            
+            # Find home and away teams
+            home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
+            away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+            
+            # Determine game status
+            state_type = status.get('type', {}).get('state', 'pre')
+            if state_type == 'in':
+                game_status = 2  # Live
+            elif state_type == 'post':
+                game_status = 3  # Final
+            else:
+                game_status = 1  # Scheduled
+            
+            games.append({
+                'gameId': event.get('id'),
+                'gameStatus': game_status,
+                'period': status.get('period', 0),
+                'gameClock': status.get('displayClock', ''),
+                'homeTeam': {
+                    'teamTricode': home_team.get('team', {}).get('abbreviation', ''),
+                    'score': int(home_team.get('score', 0))
+                },
+                'awayTeam': {
+                    'teamTricode': away_team.get('team', {}).get('abbreviation', ''),
+                    'score': int(away_team.get('score', 0))
+                }
+            })
+        
+        print(f"   📡 Fetched {len(games)} games from ESPN API")
         
         return games
         
     except Exception as e:
-        print(f"   ❌ Error fetching scoreboard: {e}")
+        print(f"   ❌ Error fetching ESPN scoreboard: {e}")
         import traceback
         traceback.print_exc()
         return []
