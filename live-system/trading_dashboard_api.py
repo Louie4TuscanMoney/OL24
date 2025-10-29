@@ -1645,7 +1645,7 @@ async def get_team_depth_chart(team_abbr: str):
         
         team_id, team_name = team_row
         
-        # Get depth chart with ADVANCED STATS
+        # Get depth chart with MPG and ADVANCED STATS
         cursor.execute("""
             SELECT 
                 p.player_id, p.name, p.position, p.jersey_number,
