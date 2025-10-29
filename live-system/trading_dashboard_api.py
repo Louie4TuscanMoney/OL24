@@ -1745,6 +1745,130 @@ async def get_team_depth_chart(team_abbr: str):
         return {"error": str(e)}
 
 
+@app.get("/api/transactions/league")
+async def get_league_transactions(limit: int = 50):
+    """
+    Get league-wide recent transactions (trades, waivers, signings)
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT 
+                pt.transaction_id,
+                pt.player_name,
+                pt.transaction_type,
+                pt.transaction_date,
+                pt.trade_description,
+                t_from.abbreviation as from_team,
+                t_from.full_name as from_team_name,
+                t_to.abbreviation as to_team,
+                t_to.full_name as to_team_name,
+                pt.created_at
+            FROM player_transactions pt
+            LEFT JOIN teams t_from ON pt.from_team_id = t_from.team_id
+            LEFT JOIN teams t_to ON pt.to_team_id = t_to.team_id
+            ORDER BY pt.transaction_date DESC, pt.created_at DESC
+            LIMIT %s
+        """, (limit,))
+        
+        transactions = []
+        for row in cur.fetchall():
+            transactions.append({
+                "id": row[0],
+                "player_name": row[1],
+                "type": row[2],
+                "date": row[3].strftime('%Y-%m-%d') if row[3] else None,
+                "description": row[4],
+                "from_team": row[5],
+                "from_team_name": row[6],
+                "to_team": row[7],
+                "to_team_name": row[8],
+                "timestamp": row[9].isoformat() if row[9] else None
+            })
+        
+        conn.close()
+        return transactions
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.get("/api/transactions/team/{team_abbr}")
+async def get_team_transactions(team_abbr: str, limit: int = 20):
+    """
+    Get transactions for a specific team (incoming/outgoing)
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        cur = conn.cursor()
+        
+        # Get team ID
+        cur.execute("SELECT team_id FROM teams WHERE abbreviation = %s", (team_abbr,))
+        team_row = cur.fetchone()
+        if not team_row:
+            conn.close()
+            return {"error": "Team not found"}
+        
+        team_id = team_row[0]
+        
+        # Get transactions
+        cur.execute("""
+            SELECT 
+                pt.transaction_id,
+                pt.player_name,
+                pt.transaction_type,
+                pt.transaction_date,
+                pt.trade_description,
+                t_from.abbreviation as from_team,
+                t_from.full_name as from_team_name,
+                t_to.abbreviation as to_team,
+                t_to.full_name as to_team_name,
+                CASE 
+                    WHEN pt.from_team_id = %s THEN 'outgoing'
+                    WHEN pt.to_team_id = %s THEN 'incoming'
+                    ELSE 'related'
+                END as direction
+            FROM player_transactions pt
+            LEFT JOIN teams t_from ON pt.from_team_id = t_from.team_id
+            LEFT JOIN teams t_to ON pt.to_team_id = t_to.team_id
+            WHERE pt.from_team_id = %s OR pt.to_team_id = %s
+            ORDER BY pt.transaction_date DESC
+            LIMIT %s
+        """, (team_id, team_id, team_id, team_id, limit))
+        
+        transactions = []
+        for row in cur.fetchall():
+            transactions.append({
+                "id": row[0],
+                "player_name": row[1],
+                "type": row[2],
+                "date": row[3].strftime('%Y-%m-%d') if row[3] else None,
+                "description": row[4],
+                "from_team": row[5],
+                "from_team_name": row[6],
+                "to_team": row[7],
+                "to_team_name": row[8],
+                "direction": row[9]  # incoming/outgoing/related
+            })
+        
+        conn.close()
+        return transactions
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
 # ============================================================================
 # ML PREDICTION ENDPOINTS
 # ============================================================================

@@ -235,6 +235,13 @@ def populate_all_nba_data():
             player_id = row['PLAYER_ID']
             gp = max(row.get('GP', 1), 1)  # Games played
             
+            # Skip players not on current rosters (traded/waived)
+            # These will be tracked separately in player_transactions table
+            cur.execute("SELECT player_id FROM players WHERE player_id = %s", (player_id,))
+            if not cur.fetchone():
+                # print(f"   ⚠️  Skipping {row.get('PLAYER_NAME')} (traded/waived)")
+                continue
+            
             # Calculate advanced stats
             fga = row.get('FGA', 0)
             fta = row.get('FTA', 0)
@@ -298,9 +305,9 @@ def populate_all_nba_data():
                 int(row.get('FG3M', 0) * gp), int(row.get('FG3A', 0) * gp),
                 int(row.get('FTM', 0) * gp), int(row.get('FTA', 0) * gp),
                 pts_100, reb_100, ast_100,
-                (row.get('STL', 0) * 100) / (total_poss / gp) if total_poss > 0 else 0,
-                (row.get('BLK', 0) * 100) / (total_poss / gp) if total_poss > 0 else 0,
-                (row.get('TOV', 0) * 100) / (total_poss / gp) if total_poss > 0 else 0
+                (row.get('STL', 0) * gp * 100) / poss_estimate if poss_estimate > 0 else 0,
+                (row.get('BLK', 0) * gp * 100) / poss_estimate if poss_estimate > 0 else 0,
+                (row.get('TOV', 0) * gp * 100) / poss_estimate if poss_estimate > 0 else 0
             ))
             stats_inserted += 1
         
