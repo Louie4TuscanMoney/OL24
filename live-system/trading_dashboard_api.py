@@ -1203,37 +1203,37 @@ async def build_complete_message() -> dict:
     """
     try:
         # Get live games (FAST - every call)
-        # 🔥 FORCE REFRESH: Bypass all caching to ensure real-time data
-        if nba_api:
-            all_games = nba_api.get_todays_games(force_refresh=True)
-            # FILTER: Only show LIVE games OR today's games (not yesterday's finals!)
-            from datetime import date
-            today_str = date.today().strftime('%Y-%m-%d')
+        # 🔥 REAL-TIME: Use nba_api directly (no caching!)
+        try:
+            from nba_api.live.nba.endpoints import scoreboard
+            
+            games_data = scoreboard.ScoreBoard()
+            games_dict = games_data.get_dict()
+            nba_games = games_dict.get('scoreboard', {}).get('games', [])
             
             # Map to frontend format (crucial!)
             live_games = []
-            for g in all_games:
-                if g.get('status') == 3:  # Skip finished games
-                    continue
-                
-                # Map backend format to frontend format
+            for game in nba_games:
+                # Map NBA API format to frontend format
                 game_mapped = {
-                    'game_id': g.get('game_id'),
-                    'home_team': g.get('home_team'),
-                    'away_team': g.get('away_team'),
-                    'score_home': g.get('home_score', 0),  # Frontend expects score_home
-                    'score_away': g.get('away_score', 0),  # Frontend expects score_away
-                    'quarter': g.get('period', 0),  # Frontend expects quarter
-                    'time_remaining': g.get('clock', ''),  # Frontend expects time_remaining
-                    'clock': g.get('clock', ''),  # Also include clock
-                    'is_live': g.get('status') == 2,  # Frontend expects is_live
-                    'status': g.get('status', 1),
-                    'status_text': g.get('status_text', ''),
-                    'game_time': g.get('game_time', ''),  # PST time
-                    'game_date': g.get('game_date', '')   # Date
+                    'game_id': game.get('gameId'),
+                    'home_team': game.get('homeTeam', {}).get('teamTricode'),
+                    'away_team': game.get('awayTeam', {}).get('teamTricode'),
+                    'score_home': game.get('homeTeam', {}).get('score', 0),  # Frontend expects score_home
+                    'score_away': game.get('awayTeam', {}).get('score', 0),  # Frontend expects score_away
+                    'quarter': game.get('period', 0),  # Frontend expects quarter
+                    'time_remaining': game.get('gameClock', ''),  # Frontend expects time_remaining
+                    'clock': game.get('gameClock', ''),  # Also include clock
+                    'is_live': game.get('gameStatus') == 2,  # Frontend expects is_live
+                    'status': game.get('gameStatus', 1),
+                    'status_text': game.get('gameStatusText', ''),
+                    'game_time': '',  # Will be enriched from DB
+                    'game_date': ''   # Will be enriched from DB
                 }
                 live_games.append(game_mapped)
-        else:
+                
+        except Exception as e:
+            print(f"⚠️ Error fetching real-time games for WebSocket: {e}")
             live_games = []
         
         # Get betting opportunities (checks Q2 6:00 window)
