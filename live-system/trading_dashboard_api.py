@@ -2139,6 +2139,194 @@ async def get_live_game_data(game_id: str):
         return {"error": str(e)}
 
 
+@app.get("/api/game/{game_id}/details")
+async def get_game_details(game_id: str):
+    """
+    COMPREHENSIVE GAME DETAILS FOR SCHEDULE PAGE
+    - Team rosters with projected starters
+    - Active injuries for both teams
+    - Season averages for key players
+    - Team records and stats
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get game info
+        cursor.execute("""
+            SELECT 
+                g.game_id, g.game_date, g.game_time,
+                g.home_team_id, g.away_team_id,
+                g.home_score, g.away_score, g.game_status,
+                ht.abbreviation as home_abbr, ht.full_name as home_name, ht.logo_url as home_logo,
+                ht.primary_color as home_primary, ht.secondary_color as home_secondary,
+                at.abbreviation as away_abbr, at.full_name as away_name, at.logo_url as away_logo,
+                at.primary_color as away_primary, at.secondary_color as away_secondary
+            FROM nba_schedule g
+            JOIN teams ht ON g.home_team_id = ht.team_id
+            JOIN teams at ON g.away_team_id = at.team_id
+            WHERE g.game_id = %s
+        """, (game_id,))
+        
+        game_row = cursor.fetchone()
+        if not game_row:
+            conn.close()
+            return {"error": "Game not found"}
+        
+        home_team_id = game_row[3]
+        away_team_id = game_row[4]
+        
+        # Get team records
+        cursor.execute("""
+            SELECT games_played, wins, losses, ppg, net_rating
+            FROM team_season_stats
+            WHERE team_id = %s AND season_id = '2025-26'
+        """, (home_team_id,))
+        home_stats = cursor.fetchone() or (0, 0, 0, 0, 0)
+        
+        cursor.execute("""
+            SELECT games_played, wins, losses, ppg, net_rating
+            FROM team_season_stats
+            WHERE team_id = %s AND season_id = '2025-26'
+        """, (away_team_id,))
+        away_stats = cursor.fetchone() or (0, 0, 0, 0, 0)
+        
+        # Get projected starters (top 5 by minutes) for home team
+        cursor.execute("""
+            SELECT 
+                p.player_id, p.name, p.first_name, p.last_name, p.position, p.jersey_number, p.headshot_url,
+                pss.ppg, pss.rpg, pss.apg, pss.fg_pct, pss.minutes_total, pss.games_played
+            FROM team_depth_charts tdc
+            JOIN players p ON tdc.player_id = p.player_id
+            JOIN player_season_stats pss ON p.player_id = pss.player_id AND pss.season_id = '2025-26'
+            WHERE tdc.team_id = %s
+            ORDER BY tdc.depth_rank ASC
+            LIMIT 5
+        """, (home_team_id,))
+        
+        home_starters = []
+        for row in cursor.fetchall():
+            home_starters.append({
+                "player_id": row[0],
+                "name": row[1],
+                "first_name": row[2],
+                "last_name": row[3],
+                "position": row[4] or "F",
+                "jersey": row[5],
+                "headshot_url": row[6],
+                "ppg": float(row[7]) if row[7] else 0,
+                "rpg": float(row[8]) if row[8] else 0,
+                "apg": float(row[9]) if row[9] else 0,
+                "fg_pct": float(row[10]) if row[10] else 0,
+                "mpg": float(row[11]) / float(row[12]) if row[11] and row[12] and row[12] > 0 else 0
+            })
+        
+        # Get projected starters for away team
+        cursor.execute("""
+            SELECT 
+                p.player_id, p.name, p.first_name, p.last_name, p.position, p.jersey_number, p.headshot_url,
+                pss.ppg, pss.rpg, pss.apg, pss.fg_pct, pss.minutes_total, pss.games_played
+            FROM team_depth_charts tdc
+            JOIN players p ON tdc.player_id = p.player_id
+            JOIN player_season_stats pss ON p.player_id = pss.player_id AND pss.season_id = '2025-26'
+            WHERE tdc.team_id = %s
+            ORDER BY tdc.depth_rank ASC
+            LIMIT 5
+        """, (away_team_id,))
+        
+        away_starters = []
+        for row in cursor.fetchall():
+            away_starters.append({
+                "player_id": row[0],
+                "name": row[1],
+                "first_name": row[2],
+                "last_name": row[3],
+                "position": row[4] or "F",
+                "jersey": row[5],
+                "headshot_url": row[6],
+                "ppg": float(row[7]) if row[7] else 0,
+                "rpg": float(row[8]) if row[8] else 0,
+                "apg": float(row[9]) if row[9] else 0,
+                "fg_pct": float(row[10]) if row[10] else 0,
+                "mpg": float(row[11]) / float(row[12]) if row[11] and row[12] and row[12] > 0 else 0
+            })
+        
+        # Get injuries for both teams
+        cursor.execute("""
+            SELECT 
+                p.name, p.position, i.status, i.injury_type, i.description
+            FROM player_injuries i
+            JOIN players p ON i.player_id = p.player_id
+            WHERE p.team_id IN (%s, %s) AND i.is_active = TRUE
+            ORDER BY 
+                CASE i.status 
+                    WHEN 'Out' THEN 1
+                    WHEN 'Doubtful' THEN 2
+                    WHEN 'Questionable' THEN 3
+                    ELSE 4
+                END
+        """, (home_team_id, away_team_id))
+        
+        injuries = []
+        for row in cursor.fetchall():
+            injuries.append({
+                "player_name": row[0],
+                "position": row[1],
+                "status": row[2],
+                "injury_type": row[3],
+                "description": row[4]
+            })
+        
+        conn.close()
+        
+        # Build comprehensive response
+        return {
+            "game": {
+                "game_id": game_row[0],
+                "date": game_row[1].strftime('%Y-%m-%d') if game_row[1] else None,
+                "time": game_row[2].strftime('%H:%M') if game_row[2] else None,
+                "status": game_row[7]
+            },
+            "home_team": {
+                "team_id": home_team_id,
+                "abbreviation": game_row[8],
+                "full_name": game_row[9],
+                "logo_url": game_row[10],
+                "primary_color": game_row[11],
+                "secondary_color": game_row[12],
+                "record": f"{home_stats[1]}-{home_stats[2]}" if home_stats[0] > 0 else "0-0",
+                "wins": home_stats[1],
+                "losses": home_stats[2],
+                "ppg": round(float(home_stats[3]), 1) if home_stats[3] else 0,
+                "net_rating": round(float(home_stats[4]), 1) if home_stats[4] else 0,
+                "projected_starters": home_starters
+            },
+            "away_team": {
+                "team_id": away_team_id,
+                "abbreviation": game_row[13],
+                "full_name": game_row[14],
+                "logo_url": game_row[15],
+                "primary_color": game_row[16],
+                "secondary_color": game_row[17],
+                "record": f"{away_stats[1]}-{away_stats[2]}" if away_stats[0] > 0 else "0-0",
+                "wins": away_stats[1],
+                "losses": away_stats[2],
+                "ppg": round(float(away_stats[3]), 1) if away_stats[3] else 0,
+                "net_rating": round(float(away_stats[4]), 1) if away_stats[4] else 0,
+                "projected_starters": away_starters
+            },
+            "injuries": injuries
+        }
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
 @app.get("/api/team/{team_abbr}/schedule")
 async def get_team_schedule(team_abbr: str, days_ahead: int = 14):
     """
