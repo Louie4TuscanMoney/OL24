@@ -53,22 +53,24 @@ def main():
 
 
 def fetch_all_games():
-    """Fetch ALL games (live + completed) from NBA scoreboard"""
+    """Fetch ALL games (live + completed) from NBA scoreboard using nba_api"""
     try:
-        url = "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
-        response = requests.get(url, timeout=10)
+        from nba_api.live.nba.endpoints import scoreboard
         
-        if response.status_code != 200:
-            print(f"   ⚠️  Scoreboard API returned {response.status_code}")
-            return []
+        # Use nba_api library (same as /api/live-games endpoint)
+        games_data = scoreboard.ScoreBoard()
+        games_dict = games_data.get_dict()
         
-        data = response.json()
-        games = data.get('scoreboard', {}).get('games', [])
+        games = games_dict.get('scoreboard', {}).get('games', [])
+        
+        print(f"   📡 Fetched {len(games)} games from nba_api")
         
         return games
         
     except Exception as e:
         print(f"   ❌ Error fetching scoreboard: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
