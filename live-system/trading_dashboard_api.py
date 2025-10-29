@@ -372,15 +372,43 @@ async def approve_request(request_id: int):
 @app.get("/api/live-games")
 async def get_live_games():
     """
-    Get current live games with PST times
+    Get current live games with PST times (REAL-TIME from nba_api)
     
     Returns:
         List of live games with scores and game times in PST
     """
-    if trading_engine is None:
-        return JSONResponse({"error": "System not initialized"}, status_code=503)
-    
-    games = trading_engine.nba_api.get_todays_games()
+    try:
+        # Use nba_api directly for real-time data (same as cron)
+        from nba_api.live.nba.endpoints import scoreboard
+        
+        games_data = scoreboard.ScoreBoard()
+        games_dict = games_data.get_dict()
+        nba_games = games_dict.get('scoreboard', {}).get('games', [])
+        
+        # Map to our format
+        games = []
+        for game in nba_games:
+            games.append({
+                'game_id': game.get('gameId'),
+                'home_team': game.get('homeTeam', {}).get('teamTricode'),
+                'away_team': game.get('awayTeam', {}).get('teamTricode'),
+                'score_home': game.get('homeTeam', {}).get('score', 0),
+                'score_away': game.get('awayTeam', {}).get('score', 0),
+                'quarter': game.get('period', 0),
+                'time_remaining': game.get('gameClock', ''),
+                'clock': game.get('gameClock', ''),
+                'is_live': game.get('gameStatus') == 2,
+                'status': game.get('gameStatus'),
+                'status_text': game.get('gameStatusText', ''),
+                'game_time': '',
+                'game_date': '',
+                'is_q2_6min': False,
+                'can_predict': False
+            })
+            
+    except Exception as e:
+        print(f"Error fetching live games: {e}")
+        games = []
     
     # Enrich games with time data from database
     conn = get_db_connection()
