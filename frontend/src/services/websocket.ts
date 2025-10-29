@@ -102,12 +102,12 @@ export class WebSocketService {
             game_id: game.game_id,
             home_team: game.home_team,
             away_team: game.away_team,
-            score_home: game.home_score,
-            score_away: game.away_score,
-            quarter: game.period, // Backend sends 'period', frontend expects 'quarter'
-            time_remaining: game.clock, // Backend sends 'clock', frontend expects 'time_remaining'
-            clock: game.clock, // Keep original for compatibility
-            is_live: game.status === 2 // status 2 = live
+            score_home: game.score_home || game.home_score || 0,
+            score_away: game.score_away || game.away_score || 0,
+            quarter: game.quarter || game.period || 0, // Backend sends 'period', frontend expects 'quarter'
+            time_remaining: game.time_remaining || game.clock || '0:00', // Backend sends 'clock', frontend expects 'time_remaining'
+            clock: game.clock || game.time_remaining || '0:00', // Keep original for compatibility
+            is_live: game.is_live || game.status === 2 // status 2 = live
           };
           
           // Check if this is newer data than what we have
