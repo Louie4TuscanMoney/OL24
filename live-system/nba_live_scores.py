@@ -59,11 +59,11 @@ class NBALiveScores:
         self._cache_max_age = 5  # ⚡ Cache valid for only 5 seconds (ultra-fresh data!)
         
         print(f"✅ NBA API initialized: MULTI-SOURCE FRESHNESS STRATEGY")
-        print(f"   Sources: nba_api + ESPN (fetched simultaneously)")
-        print(f"   Strategy: Compare all sources, use HIGHEST score (= freshest)")
-        print(f"   Logic: If nba_api shows 68-72 but ESPN shows 70-74, use ESPN")
+        print(f"   Sources: nba_api + ESPN CDN (xhr=1 LIVE!) + ESPN API")
+        print(f"   Strategy: Fetch ALL sources simultaneously, use HIGHEST score")
+        print(f"   ESPN CDN: cdn.espn.com/core/nba/scoreboard?xhr=1 (FASTEST!)")
         print(f"   Force refresh: EVERY WebSocket call (1/sec)")
-        print(f"   Result: Always use the freshest available data!")
+        print(f"   Result: Always the freshest data from any source!")
         
     def get_todays_games(self, force_refresh: bool = False) -> List[Dict]:
         """
@@ -110,11 +110,11 @@ class NBALiveScores:
             except Exception as e:
                 print(f"   ❌ nba_api failed: {e}")
         
-        # SOURCE 2: ESPN API
+        # SOURCE 2: ESPN CDN (FAST - xhr=1 for live updates!)
         try:
-            print(f"⚡ Fetching from ESPN...")
+            print(f"⚡ Fetching from ESPN CDN (LIVE UPDATES!)...")
             response = requests.get(
-                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+                "https://cdn.espn.com/core/nba/scoreboard?xhr=1&limit=50",
                 headers=self.headers,
                 timeout=2
             )
@@ -122,17 +122,50 @@ class NBALiveScores:
                 data = response.json()
                 espn_games = []
                 
+                # ESPN CDN format might be different - try both formats
                 if 'events' in data:
                     for event in data['events']:
                         parsed = self._parse_espn_game(event)
                         if parsed:
                             espn_games.append(parsed)
+                elif 'content' in data and 'sbData' in data['content']:
+                    # Alternative CDN format
+                    sb_data = data['content']['sbData']
+                    if 'events' in sb_data:
+                        for event in sb_data['events']:
+                            parsed = self._parse_espn_game(event)
+                            if parsed:
+                                espn_games.append(parsed)
                 
                 if espn_games:
-                    all_sources.append(('espn', espn_games))
-                    print(f"   ✅ ESPN: {len(espn_games)} games")
+                    all_sources.append(('espn_cdn', espn_games))
+                    print(f"   ✅ ESPN CDN: {len(espn_games)} games (LIVE UPDATES!)")
         except Exception as e:
-            print(f"   ❌ ESPN failed: {e}")
+            print(f"   ❌ ESPN CDN failed: {e}")
+        
+        # SOURCE 3: ESPN API (fallback)
+        try:
+            print(f"⚡ Fetching from ESPN API (fallback)...")
+            response = requests.get(
+                "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+                headers=self.headers,
+                timeout=2
+            )
+            if response.status_code == 200:
+                data = response.json()
+                espn_api_games = []
+                
+                if 'events' in data:
+                    for event in data['events']:
+                        parsed = self._parse_espn_game(event)
+                        if parsed:
+                            espn_api_games.append(parsed)
+                
+                if espn_api_games:
+                    all_sources.append(('espn_api', espn_api_games))
+                    print(f"   ✅ ESPN API: {len(espn_api_games)} games")
+        except Exception as e:
+            print(f"   ❌ ESPN API failed: {e}")
         
         # PICK THE FRESHEST DATA (highest score = most recent)
         if all_sources:
