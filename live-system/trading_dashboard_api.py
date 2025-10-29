@@ -25,6 +25,7 @@ import time
 import sys
 import json
 import os
+from trading_dashboard_live import router as trading_router
 
 # Import components (all in same directory on Railway)
 try:
@@ -371,15 +372,57 @@ async def approve_request(request_id: int):
 @app.get("/api/live-games")
 async def get_live_games():
     """
-    Get current live games
+    Get current live games with PST times
     
     Returns:
-        List of live games with scores
+        List of live games with scores and game times in PST
     """
     if trading_engine is None:
         return JSONResponse({"error": "System not initialized"}, status_code=503)
     
     games = trading_engine.nba_api.get_todays_games()
+    
+    # Enrich games with time data from database
+    conn = get_db_connection()
+    if conn:
+        try:
+            from datetime import datetime as dt
+            from zoneinfo import ZoneInfo
+            
+            cursor = conn.cursor()
+            
+            for game in games:
+                game_id = game.get('game_id', '')
+                
+                # Get time from schedule
+                cursor.execute("""
+                    SELECT game_date, game_time
+                    FROM nba_schedule
+                    WHERE game_id = %s
+                """, (game_id,))
+                
+                result = cursor.fetchone()
+                if result and result[1]:
+                    game_date = result[0]
+                    game_time = result[1]
+                    
+                    try:
+                        # Convert UTC to PST
+                        utc_datetime = dt.combine(game_date, game_time).replace(tzinfo=ZoneInfo('UTC'))
+                        pst_datetime = utc_datetime.astimezone(ZoneInfo('America/Los_Angeles'))
+                        game['time_pst'] = pst_datetime.strftime('%I:%M %p PST')
+                        game['time_utc'] = game_time.strftime('%H:%M')
+                    except:
+                        game['time_pst'] = game_time.strftime('%I:%M %p') if game_time else None
+                else:
+                    game['time_pst'] = None
+                    game['time_utc'] = None
+            
+            conn.close()
+        except Exception as e:
+            if conn:
+                conn.close()
+            print(f"⚠️ Could not enrich game times: {e}")
     
     return {
         "games": games,
@@ -1263,20 +1306,60 @@ def _calculate_consistency(games):
 # ============================================================================
 
 @app.get("/api/stats/teams")
-async def get_all_teams():
-    """Get all 30 NBA teams with stats from team_season_stats table"""
+async def get_all_teams(
+    conference: Optional[str] = None,
+    division: Optional[str] = None,
+    sort_by: str = "wins"
+):
+    """
+    Get all 30 NBA teams with stats from team_season_stats table
+    
+    Query params:
+    - conference: Filter by 'East' or 'West'
+    - division: Filter by division (e.g. 'Atlantic', 'Central', 'Southeast', etc.)
+    - sort_by: 'wins', 'ppg', 'net_rating', 'abbreviation' (default: 'wins')
+    """
     conn = get_db_connection()
     if not conn:
         return {"error": "Database not configured", "teams": [], "count": 0}
     
     try:
         cursor = conn.cursor()
+        
+        # Build WHERE clause for filters
+        where_clauses = []
+        params = []
+        
+        if conference:
+            where_clauses.append("t.conference = %s")
+            params.append(conference)
+        
+        if division:
+            where_clauses.append("t.division = %s")
+            params.append(division)
+        
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        # Build ORDER BY clause
+        order_by_map = {
+            "wins": "tss.wins DESC NULLS LAST, t.abbreviation",
+            "ppg": "tss.ppg DESC NULLS LAST",
+            "net_rating": "tss.net_rating DESC NULLS LAST",
+            "abbreviation": "t.abbreviation",
+            "conference": "t.conference, t.division, tss.wins DESC NULLS LAST"
+        }
+        order_by = order_by_map.get(sort_by, order_by_map["wins"])
+        
         # Get team stats from team_season_stats table
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT 
                 t.team_id,
                 t.abbreviation,
                 t.full_name,
+                t.conference,
+                t.division,
                 t.logo_url,
                 t.primary_color,
                 t.secondary_color,
@@ -1287,8 +1370,9 @@ async def get_all_teams():
                 COALESCE(tss.net_rating, 0) as net_rating
             FROM teams t
             LEFT JOIN team_season_stats tss ON t.team_id = tss.team_id AND tss.season_id = '2025-26'
-            ORDER BY tss.wins DESC NULLS LAST, t.abbreviation
-        """)
+            {where_sql}
+            ORDER BY {order_by}
+        """, params)
         
         teams_list = []
         for row in cursor.fetchall():
@@ -1296,14 +1380,16 @@ async def get_all_teams():
                 "team_id": row[0],
                 "abbreviation": row[1],
                 "full_name": row[2],
-                "logo_url": row[3],
-                "primary_color": row[4],
-                "secondary_color": row[5],
-                "games_played": int(row[6]),
-                "wins": int(row[7]),
-                "losses": int(row[8]),
-                "ppg": round(float(row[9]), 1),
-                "net_rating": round(float(row[10]), 1)
+                "conference": row[3],
+                "division": row[4],
+                "logo_url": row[5],
+                "primary_color": row[6],
+                "secondary_color": row[7],
+                "games_played": int(row[8]),
+                "wins": int(row[9]),
+                "losses": int(row[10]),
+                "ppg": round(float(row[11]), 1),
+                "net_rating": round(float(row[12]), 1)
             })
         
         conn.close()
@@ -1312,6 +1398,116 @@ async def get_all_teams():
         if conn:
             conn.close()
         return {"error": str(e), "teams": [], "count": 0}
+
+
+@app.get("/api/search")
+async def search_teams_and_players(q: str):
+    """
+    Universal search for teams and players
+    
+    Query params:
+    - q: Search query (searches team names/abbr and player names)
+    
+    Returns:
+    - teams: Matching teams
+    - players: Matching players
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"teams": [], "players": [], "error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        search_term = f"%{q}%"
+        
+        # Search teams
+        cursor.execute("""
+            SELECT 
+                t.team_id,
+                t.abbreviation,
+                t.full_name,
+                t.conference,
+                t.division,
+                t.logo_url,
+                t.primary_color,
+                COALESCE(tss.wins, 0) as wins,
+                COALESCE(tss.losses, 0) as losses
+            FROM teams t
+            LEFT JOIN team_season_stats tss ON t.team_id = tss.team_id AND tss.season_id = '2025-26'
+            WHERE 
+                t.full_name ILIKE %s OR 
+                t.abbreviation ILIKE %s OR
+                t.city ILIKE %s
+            ORDER BY t.abbreviation
+            LIMIT 10
+        """, (search_term, search_term, search_term))
+        
+        teams = []
+        for row in cursor.fetchall():
+            teams.append({
+                "team_id": row[0],
+                "abbreviation": row[1],
+                "full_name": row[2],
+                "conference": row[3],
+                "division": row[4],
+                "logo_url": row[5],
+                "primary_color": row[6],
+                "record": f"{row[7]}-{row[8]}"
+            })
+        
+        # Search players
+        cursor.execute("""
+            SELECT 
+                p.player_id,
+                p.name,
+                p.position,
+                p.jersey_number,
+                p.headshot_url,
+                t.abbreviation as team_abbr,
+                t.primary_color,
+                COALESCE(pss.ppg, 0) as ppg,
+                COALESCE(pss.rpg, 0) as rpg,
+                COALESCE(pss.apg, 0) as apg
+            FROM players p
+            LEFT JOIN teams t ON p.team_id = t.team_id
+            LEFT JOIN player_season_stats pss ON p.player_id = pss.player_id AND pss.season_id = '2025-26'
+            WHERE 
+                p.name ILIKE %s OR
+                p.first_name ILIKE %s OR
+                p.last_name ILIKE %s
+            ORDER BY pss.ppg DESC NULLS LAST
+            LIMIT 10
+        """, (search_term, search_term, search_term))
+        
+        players = []
+        for row in cursor.fetchall():
+            players.append({
+                "player_id": row[0],
+                "name": row[1],
+                "position": row[2],
+                "jersey_number": row[3],
+                "headshot_url": row[4],
+                "team_abbr": row[5],
+                "team_color": row[6],
+                "stats": {
+                    "ppg": round(float(row[7]), 1) if row[7] else 0,
+                    "rpg": round(float(row[8]), 1) if row[8] else 0,
+                    "apg": round(float(row[9]), 1) if row[9] else 0
+                }
+            })
+        
+        conn.close()
+        return {
+            "query": q,
+            "teams": teams,
+            "players": players,
+            "count": {"teams": len(teams), "players": len(players)}
+        }
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"teams": [], "players": [], "error": str(e)}
 
 
 @app.get("/api/stats/standings")
@@ -1570,14 +1766,16 @@ async def get_all_injuries():
 @app.get("/api/schedule")
 async def get_nba_schedule(days_ahead: int = 7):
     """
-    Get NBA schedule for next N days
+    Get NBA schedule for next N days with PST/PDT times
     """
     conn = get_db_connection()
     if not conn:
         return {"games": []}
     
     try:
-        from datetime import date, timedelta
+        from datetime import date, timedelta, datetime as dt
+        from zoneinfo import ZoneInfo
+        
         today = date.today()
         end_date = today + timedelta(days=days_ahead)
         
@@ -1585,8 +1783,8 @@ async def get_nba_schedule(days_ahead: int = 7):
         cursor.execute("""
             SELECT 
                 s.game_id, s.game_date, s.game_time,
-                home.abbreviation, home.full_name, home.logo_url,
-                away.abbreviation, away.full_name, away.logo_url,
+                home.abbreviation, home.full_name, home.logo_url, home.team_id,
+                away.abbreviation, away.full_name, away.logo_url, away.team_id,
                 s.game_status, s.home_score, s.away_score,
                 s.arena, s.tv_broadcast
             FROM nba_schedule s
@@ -1598,16 +1796,43 @@ async def get_nba_schedule(days_ahead: int = 7):
         
         games = []
         for row in cursor.fetchall():
+            game_date = row[1]
+            game_time = row[2]
+            
+            # Convert to PST/PDT
+            time_pst = None
+            time_utc = None
+            if game_time:
+                try:
+                    # Assume game_time is in UTC (from nba_api)
+                    utc_datetime = dt.combine(game_date, game_time).replace(tzinfo=ZoneInfo('UTC'))
+                    pst_datetime = utc_datetime.astimezone(ZoneInfo('America/Los_Angeles'))
+                    time_pst = pst_datetime.strftime('%I:%M %p PST')
+                    time_utc = game_time.strftime('%H:%M')
+                except:
+                    time_pst = game_time.strftime('%I:%M %p') if game_time else None
+            
             games.append({
                 "game_id": row[0],
-                "date": row[1].strftime('%Y-%m-%d'),
-                "time": row[2].strftime('%H:%M') if row[2] else None,
-                "home_team": {"abbr": row[3], "name": row[4], "logo": row[5]},
-                "away_team": {"abbr": row[6], "name": row[7], "logo": row[8]},
-                "status": row[9],
-                "score": {"home": row[10], "away": row[11]} if row[10] else None,
-                "arena": row[12],
-                "tv": row[13]
+                "date": game_date.strftime('%Y-%m-%d'),
+                "time": time_pst,  # PST formatted
+                "time_utc": time_utc,  # UTC backup
+                "home_team": {
+                    "team_id": row[6],
+                    "abbr": row[3], 
+                    "name": row[4], 
+                    "logo": row[5]
+                },
+                "away_team": {
+                    "team_id": row[10],
+                    "abbr": row[7], 
+                    "name": row[8], 
+                    "logo": row[9]
+                },
+                "status": row[11],
+                "score": {"home": row[12], "away": row[13]} if row[12] is not None else None,
+                "arena": row[14],
+                "tv": row[15]
             })
         
         conn.close()
@@ -1622,23 +1847,11 @@ async def get_nba_schedule(days_ahead: int = 7):
 @app.get("/api/team/{team_abbr}/depth-chart")
 async def get_team_depth_chart(team_abbr: str):
     """
-    Get team depth chart with projected starters (using nba_api!)
+    Get team depth chart from database (populated from ESPN API)
     """
-    # Use nba_api team service instead of empty database
-    try:
-        import sys
-        sys.path.insert(0, '/app/backend/services')
-        from nba_team_service import team_service
-        
-        result = team_service.get_depth_chart(team_abbr)
-        return result
-    except Exception as e:
-        print(f"⚠️  Team service not available, falling back to database...")
-    
-    # Fallback to database (if service fails)
     conn = get_db_connection()
     if not conn:
-        return {"error": "Database not configured and team service unavailable"}
+        return {"error": "Database not configured"}
     
     try:
         cursor = conn.cursor()
@@ -1736,6 +1949,85 @@ async def get_team_depth_chart(team_abbr: str):
             "all_players": all_players,
             "depth_chart": positions,
             "total_players": len(all_players)
+        }
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return {"error": str(e)}
+
+
+@app.get("/api/team/{team_abbr}/roster")
+async def get_team_full_roster(team_abbr: str):
+    """
+    Get complete team roster with ALL players and their stats
+    Returns everyone on the team (not just starters)
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get team
+        cursor.execute("""
+            SELECT team_id, full_name, logo_url
+            FROM teams WHERE abbreviation = %s
+        """, (team_abbr,))
+        
+        team_row = cursor.fetchone()
+        if not team_row:
+            conn.close()
+            return {"error": "Team not found"}
+        
+        team_id, team_name, logo = team_row
+        
+        # Get ALL players with stats
+        cursor.execute("""
+            SELECT 
+                p.player_id, p.name, p.position, p.jersey_number, p.headshot_url,
+                COALESCE(pss.games_played, 0) as gp,
+                COALESCE(pss.ppg, 0) as ppg,
+                COALESCE(pss.rpg, 0) as rpg,
+                COALESCE(pss.apg, 0) as apg,
+                COALESCE(pss.mpg, 0) as mpg,
+                COALESCE(pss.fg_pct, 0) as fg_pct,
+                COALESCE(pss.fg3_pct, 0) as fg3_pct,
+                COALESCE(pss.ft_pct, 0) as ft_pct
+            FROM players p
+            LEFT JOIN player_season_stats pss 
+                ON p.player_id = pss.player_id AND pss.season_id = '2025-26'
+            WHERE p.team_id = %s
+            ORDER BY COALESCE(pss.ppg, 0) DESC
+        """, (team_id,))
+        
+        roster = []
+        for row in cursor.fetchall():
+            roster.append({
+                "player_id": row[0],
+                "name": row[1],
+                "position": row[2],
+                "jersey": row[3],
+                "headshot_url": row[4],
+                "stats": {
+                    "gp": int(row[5]) if row[5] else 0,
+                    "ppg": round(float(row[6]), 1) if row[6] else 0,
+                    "rpg": round(float(row[7]), 1) if row[7] else 0,
+                    "apg": round(float(row[8]), 1) if row[8] else 0,
+                    "mpg": round(float(row[9]), 1) if row[9] else 0,
+                    "fg_pct": round(float(row[10]) * 100, 1) if row[10] else 0,
+                    "fg3_pct": round(float(row[11]) * 100, 1) if row[11] else 0,
+                    "ft_pct": round(float(row[12]) * 100, 1) if row[12] else 0
+                }
+            })
+        
+        conn.close()
+        
+        return {
+            "team": {"abbreviation": team_abbr, "name": team_name, "logo": logo},
+            "roster": roster,
+            "count": len(roster)
         }
         
     except Exception as e:
@@ -2416,3 +2708,12 @@ def start_dashboard_api(host: str = "0.0.0.0", port: int = None):
 if __name__ == "__main__":
     start_dashboard_api()
 
+
+
+# Mamba Live WebSocket
+from mamba_live_websocket import mamba_websocket_handler
+
+@app.websocket("/ws/mamba/{game_id}")
+async def websocket_mamba_endpoint(websocket: WebSocket, game_id: str):
+    """Real-time Mamba updates for a specific game"""
+    await mamba_websocket_handler(websocket, game_id)
