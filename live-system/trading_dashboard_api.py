@@ -79,6 +79,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Start daily NBA data scheduler (3:30 AM UTC updates)
+try:
+    sys.path.insert(0, '../backend/services')
+    from daily_nba_scheduler import start_scheduler
+    start_scheduler()
+except ImportError:
+    print("⚠️ Daily NBA scheduler not available (install 'schedule' package)")
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -1646,22 +1654,38 @@ async def get_team_depth_chart(team_abbr: str):
         team_id, team_name = team_row
         
         # Get depth chart with MPG and ADVANCED STATS
+        # NOTE: team_depth_charts doesn't have season_id, avg_mpg, or is_starter
+        # We'll use player_season_stats to get MPG and compute starters from MPG
         cursor.execute("""
             SELECT 
                 p.player_id, p.name, p.position, p.jersey_number,
-                dc.depth_rank, dc.avg_mpg, dc.is_starter,
-                ps.ppg, ps.rpg, ps.apg, ps.gp,
-                ps.ts_pct, ps.efg_pct, ps.pts_100, ps.reb_100, ps.ast_100,
-                ps.fg_pct, ps.fg3_pct, ps.ft_pct,
+                COALESCE(dc.depth_rank, 99) as depth_rank,
+                COALESCE(ps.minutes_total / NULLIF(ps.games_played, 0), 0) as avg_mpg,
+                CASE WHEN COALESCE(ps.minutes_total / NULLIF(ps.games_played, 0), 0) >= 25 THEN TRUE ELSE FALSE END as is_starter,
+                COALESCE(ps.ppg, 0) as ppg, 
+                COALESCE(ps.rpg, 0) as rpg, 
+                COALESCE(ps.apg, 0) as apg, 
+                COALESCE(ps.games_played, 0) as gp,
+                COALESCE(ps.ts_pct, 0) as ts_pct, 
+                COALESCE(ps.efg_pct, 0) as efg_pct, 
+                COALESCE(ps.pts_100, 0) as pts_100, 
+                COALESCE(ps.reb_100, 0) as reb_100, 
+                COALESCE(ps.ast_100, 0) as ast_100,
+                COALESCE(ps.fg_pct, 0) as fg_pct, 
+                COALESCE(ps.fg3_pct, 0) as fg3_pct, 
+                COALESCE(ps.ft_pct, 0) as ft_pct,
                 (SELECT status FROM player_injuries 
                  WHERE player_id = p.player_id AND is_active = TRUE 
                  LIMIT 1) as injury_status
-            FROM team_depth_charts dc
-            JOIN players p ON p.player_id = dc.player_id
-            LEFT JOIN player_season_stats ps ON ps.player_id = p.player_id AND ps.season_id = dc.season_id
-            WHERE dc.team_id = %s AND dc.season_id = '2025-26'
-            ORDER BY dc.is_starter DESC, dc.depth_rank, dc.avg_mpg DESC
-        """, (team_id,))
+            FROM players p
+            LEFT JOIN team_depth_charts dc ON dc.player_id = p.player_id AND dc.team_id = %s
+            LEFT JOIN player_season_stats ps ON ps.player_id = p.player_id AND ps.season_id = '2025-26'
+            WHERE p.team_id = %s
+            ORDER BY 
+                CASE WHEN COALESCE(ps.minutes_total / NULLIF(ps.games_played, 0), 0) >= 25 THEN 0 ELSE 1 END,
+                COALESCE(dc.depth_rank, 99),
+                COALESCE(ps.minutes_total / NULLIF(ps.games_played, 0), 0) DESC
+        """, (team_id, team_id))
         
         positions = {'PG': [], 'SG': [], 'SF': [], 'PF': [], 'C': []}
         starters = []

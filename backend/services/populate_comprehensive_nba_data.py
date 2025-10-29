@@ -93,19 +93,36 @@ def populate_all_nba_data():
         'TOR': ('Toronto', 'ON'), 'UTA': ('Salt Lake City', 'UT'), 'WAS': ('Washington', 'DC')
     }
     
+    # Conference/Division mapping
+    team_conference_division = {
+        'ATL': ('East', 'Southeast'), 'BOS': ('East', 'Atlantic'), 'BKN': ('East', 'Atlantic'),
+        'CHA': ('East', 'Southeast'), 'CHI': ('East', 'Central'), 'CLE': ('East', 'Central'),
+        'DAL': ('West', 'Southwest'), 'DEN': ('West', 'Northwest'), 'DET': ('East', 'Central'),
+        'GSW': ('West', 'Pacific'), 'HOU': ('West', 'Southwest'), 'IND': ('East', 'Central'),
+        'LAC': ('West', 'Pacific'), 'LAL': ('West', 'Pacific'), 'MEM': ('West', 'Southwest'),
+        'MIA': ('East', 'Southeast'), 'MIL': ('East', 'Central'), 'MIN': ('West', 'Northwest'),
+        'NOP': ('West', 'Southwest'), 'NYK': ('East', 'Atlantic'), 'OKC': ('West', 'Northwest'),
+        'ORL': ('East', 'Southeast'), 'PHI': ('East', 'Atlantic'), 'PHX': ('West', 'Pacific'),
+        'POR': ('West', 'Northwest'), 'SAC': ('West', 'Pacific'), 'SAS': ('West', 'Southwest'),
+        'TOR': ('East', 'Atlantic'), 'UTA': ('West', 'Northwest'), 'WAS': ('East', 'Southeast')
+    }
+    
     for team in all_teams:
         city, state = team_locations.get(team['abbreviation'], ('Unknown', ''))
+        conference, division = team_conference_division.get(team['abbreviation'], ('West', 'Pacific'))
         
         cur.execute("""
-            INSERT INTO teams (team_id, abbreviation, nickname, full_name, city, state, year_founded)
+            INSERT INTO teams (team_id, abbreviation, full_name, city, state, conference, division)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (team_id) DO UPDATE SET
                 abbreviation = EXCLUDED.abbreviation,
                 full_name = EXCLUDED.full_name,
-                city = EXCLUDED.city
+                city = EXCLUDED.city,
+                conference = EXCLUDED.conference,
+                division = EXCLUDED.division
         """, (
-            team['id'], team['abbreviation'], team['nickname'],
-            team['full_name'], city, state, team.get('year_founded', 1946)
+            team['id'], team['abbreviation'], team['full_name'], 
+            city, state, conference, division
         ))
     
     conn.commit()
@@ -119,6 +136,45 @@ def populate_all_nba_data():
     print("👥 STEP 2: POPULATING PLAYERS & ROSTERS")
     print("="*80)
     
+    # Position normalization function (convert compound positions to valid schema values)
+    def normalize_position(pos_str):
+        """Convert positions like 'F-C', 'G-F' to valid schema positions."""
+        if not pos_str or pos_str == '':
+            return 'F'  # Default fallback
+        
+        pos_str = str(pos_str).strip().upper()
+        
+        # If it's already valid, return it
+        valid_positions = ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F']
+        if pos_str in valid_positions:
+            return pos_str
+        
+        # Convert compound positions to primary position
+        position_map = {
+            'F-C': 'PF',   # Forward-Center → Power Forward
+            'C-F': 'C',    # Center-Forward → Center
+            'G-F': 'SG',   # Guard-Forward → Shooting Guard
+            'F-G': 'SF',   # Forward-Guard → Small Forward
+            'GUARD': 'G',
+            'FORWARD': 'F',
+            'CENTER': 'C'
+        }
+        
+        if pos_str in position_map:
+            return position_map[pos_str]
+        
+        # Take the first letter if multi-character
+        if len(pos_str) > 1:
+            first_char = pos_str[0]
+            if first_char == 'G':
+                return 'G'
+            elif first_char == 'F':
+                return 'F'
+            elif first_char == 'C':
+                return 'C'
+        
+        return 'F'  # Default fallback
+    
     total_players = 0
     
     for team in all_teams:
@@ -129,8 +185,12 @@ def populate_all_nba_data():
             roster_df = roster.get_data_frames()[0]
             
             for idx, player_row in roster_df.iterrows():
+                # Normalize position to match schema constraints
+                raw_position = player_row.get('POSITION', 'F')
+                normalized_position = normalize_position(raw_position)
+                
                 cur.execute("""
-                    INSERT INTO players (player_id, player_name, team_id, position, jersey_number)
+                    INSERT INTO players (player_id, name, team_id, position, jersey_number)
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (player_id) DO UPDATE SET
                         team_id = EXCLUDED.team_id,
@@ -139,7 +199,7 @@ def populate_all_nba_data():
                     player_row['PLAYER_ID'],
                     player_row['PLAYER'],
                     team['id'],
-                    player_row.get('POSITION', ''),
+                    normalized_position,
                     player_row.get('NUM', '')
                 ))
                 total_players += 1
@@ -203,36 +263,44 @@ def populate_all_nba_data():
             
             cur.execute("""
                 INSERT INTO player_season_stats (
-                    player_id, season_id, team_id, games_played, minutes_played,
-                    ppg, rpg, apg, spg, bpg, tov, mpg,
-                    fg_pct, fg3_pct, ft_pct, ts_pct, efg_pct,
-                    pts_100, reb_100, ast_100,
-                    pts_36, reb_36, ast_36
+                    player_id, season_id, team_id, 
+                    games_played, minutes_total,
+                    pts_total, reb_total, ast_total, stl_total, blk_total, tov_total,
+                    fgm_total, fga_total, fg3m_total, fg3a_total, ftm_total, fta_total,
+                    pts_100, reb_100, ast_100, stl_100, blk_100, tov_100
                 ) VALUES (
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s
                 )
                 ON CONFLICT (player_id, season_id) DO UPDATE SET
                     games_played = EXCLUDED.games_played,
-                    mpg = EXCLUDED.mpg,
-                    ppg = EXCLUDED.ppg,
-                    rpg = EXCLUDED.rpg,
-                    apg = EXCLUDED.apg,
-                    ts_pct = EXCLUDED.ts_pct,
-                    efg_pct = EXCLUDED.efg_pct,
+                    minutes_total = EXCLUDED.minutes_total,
+                    pts_total = EXCLUDED.pts_total,
+                    reb_total = EXCLUDED.reb_total,
+                    ast_total = EXCLUDED.ast_total,
+                    stl_total = EXCLUDED.stl_total,
+                    blk_total = EXCLUDED.blk_total,
+                    tov_total = EXCLUDED.tov_total,
+                    fgm_total = EXCLUDED.fgm_total,
+                    fga_total = EXCLUDED.fga_total,
                     pts_100 = EXCLUDED.pts_100,
-                    pts_36 = EXCLUDED.pts_36
+                    reb_100 = EXCLUDED.reb_100,
+                    ast_100 = EXCLUDED.ast_100
             """, (
-                player_id, '2025-26', row['TEAM_ID'], gp, row.get('MIN', 0) * gp,
-                row.get('PTS', 0), row.get('REB', 0), row.get('AST', 0),
-                row.get('STL', 0), row.get('BLK', 0), row.get('TOV', 0), row.get('MIN', 0),
-                row.get('FG_PCT', 0), row.get('FG3_PCT', 0), row.get('FT_PCT', 0),
-                ts_pct, efg_pct,
+                player_id, '2025-26', str(row['TEAM_ID']),
+                gp, row.get('MIN', 0) * gp,
+                int(row.get('PTS', 0) * gp), int(row.get('REB', 0) * gp), int(row.get('AST', 0) * gp),
+                int(row.get('STL', 0) * gp), int(row.get('BLK', 0) * gp), int(row.get('TOV', 0) * gp),
+                int(row.get('FGM', 0) * gp), int(row.get('FGA', 0) * gp),
+                int(row.get('FG3M', 0) * gp), int(row.get('FG3A', 0) * gp),
+                int(row.get('FTM', 0) * gp), int(row.get('FTA', 0) * gp),
                 pts_100, reb_100, ast_100,
-                pts_36, reb_36, ast_36
+                (row.get('STL', 0) * 100) / (total_poss / gp) if total_poss > 0 else 0,
+                (row.get('BLK', 0) * 100) / (total_poss / gp) if total_poss > 0 else 0,
+                (row.get('TOV', 0) * 100) / (total_poss / gp) if total_poss > 0 else 0
             ))
             stats_inserted += 1
         
@@ -259,8 +327,16 @@ def populate_all_nba_data():
         )
         team_df = team_stats.get_data_frames()[0]
         
+        # Get valid team IDs from our database
+        valid_team_ids = {str(team['id']) for team in all_teams}
+        
         for _, row in team_df.iterrows():
-            team_id = row['TEAM_ID']
+            team_id = str(row['TEAM_ID'])
+            
+            # Skip if not a valid team (API sometimes returns league averages or invalid IDs)
+            if team_id not in valid_team_ids:
+                continue
+            
             gp = max(row.get('GP', 1), 1)
             wins = row.get('W', 0)
             losses = row.get('L', 0)
@@ -291,28 +367,30 @@ def populate_all_nba_data():
             cur.execute("""
                 INSERT INTO team_season_stats (
                     team_id, season_id, games_played, wins, losses,
-                    ppg, opp_ppg, pace, ortg, drtg, net_rating,
-                    fg_pct, fg3_pct, ft_pct, ts_pct, efg_pct,
-                    win_pct, pythagorean_wins, luck
+                    pts_total, pts_allowed_total,
+                    pace, offensive_rating, defensive_rating,
+                    efg_pct, pythagorean_wins
                 ) VALUES (
                     %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s,
+                    %s, %s, %s,
+                    %s, %s
                 )
                 ON CONFLICT (team_id, season_id) DO UPDATE SET
+                    games_played = EXCLUDED.games_played,
                     wins = EXCLUDED.wins,
                     losses = EXCLUDED.losses,
-                    net_rating = EXCLUDED.net_rating,
-                    ortg = EXCLUDED.ortg,
-                    drtg = EXCLUDED.drtg,
-                    luck = EXCLUDED.luck
+                    pts_total = EXCLUDED.pts_total,
+                    pts_allowed_total = EXCLUDED.pts_allowed_total,
+                    offensive_rating = EXCLUDED.offensive_rating,
+                    defensive_rating = EXCLUDED.defensive_rating,
+                    pythagorean_wins = EXCLUDED.pythagorean_wins
             """, (
                 team_id, '2025-26', gp, wins, losses,
-                pts / gp, opp_pts / gp, team_poss_per_game, ortg, drtg, net_rating,
-                row.get('FG_PCT', 0), row.get('FG3_PCT', 0), row.get('FT_PCT', 0),
-                row.get('TS_PCT', 0) if 'TS_PCT' in row else 0, row.get('EFG_PCT', 0) if 'EFG_PCT' in row else efg_pct,
-                actual_win_pct, expected_win_pct * (wins + losses), luck
+                int(pts), int(opp_pts),
+                team_poss_per_game, ortg, drtg,
+                row.get('EFG_PCT', 0) if 'EFG_PCT' in row else 0,
+                expected_win_pct * (wins + losses)
             ))
         
         conn.commit()
@@ -337,30 +415,30 @@ def populate_all_nba_data():
         try:
             # Get players for this team with their MPG
             cur.execute("""
-                SELECT p.player_id, p.player_name, p.position, ps.mpg
+                SELECT p.player_id, p.name, p.position, ps.mpg
                 FROM players p
                 LEFT JOIN player_season_stats ps ON p.player_id = ps.player_id AND ps.season_id = '2025-26'
                 WHERE p.team_id = %s
                 ORDER BY ps.mpg DESC NULLS LAST
-            """, (team['id'],))
+            """, (str(team['id']),))
             
             team_players = cur.fetchall()
             
-            # Top 5-7 by MPG are starters
-            for idx, (player_id, name, position, mpg) in enumerate(team_players):
-                is_starter = idx < 5  # Top 5 are starters
+            # Top 5 by MPG are starters (depth_rank 1-5 only per schema constraint)
+            for idx, (player_id, name, position, mpg) in enumerate(team_players[:5]):
+                # Schema constraint: depth_rank must be 1-5
+                depth_rank = min(idx + 1, 5)
                 
                 cur.execute("""
                     INSERT INTO team_depth_charts (
-                        team_id, player_id, position, depth_order, 
-                        is_projected_starter, avg_mpg
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (team_id, player_id) DO UPDATE SET
-                        depth_order = EXCLUDED.depth_order,
-                        is_projected_starter = EXCLUDED.is_projected_starter,
-                        avg_mpg = EXCLUDED.avg_mpg
+                        team_id, player_id, position, depth_rank, 
+                        minutes_projection
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (team_id, player_id, position) DO UPDATE SET
+                        depth_rank = EXCLUDED.depth_rank,
+                        minutes_projection = EXCLUDED.minutes_projection
                 """, (
-                    team['id'], player_id, position or 'G', idx, is_starter, mpg or 0
+                    str(team['id']), player_id, position or 'G', depth_rank, mpg or 0
                 ))
             
             conn.commit()
@@ -424,8 +502,8 @@ def populate_all_nba_data():
                     game_row['GAME_ID'],
                     '2025-26',
                     game_row['GAME_DATE'],
-                    home_team['id'],
-                    away_team['id'],
+                    str(home_team['id']),
+                    str(away_team['id']),
                     game_row.get('PTS', 0) if game_row['TEAM_ID'] == home_team['id'] else 0,
                     game_row.get('PTS', 0) if game_row['TEAM_ID'] == away_team['id'] else 0,
                     'Final' if game_row.get('WL') else 'Scheduled'
