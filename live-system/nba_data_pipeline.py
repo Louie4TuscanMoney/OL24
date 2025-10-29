@@ -211,18 +211,10 @@ class ESPNAPIClient:
             home_score = int(home.get('score', 0) or 0)
             away_score = int(away.get('score', 0) or 0)
             
-            # Extract game time and date - CONVERT TO PST!
-            from datetime import timezone, timedelta
-            
-            game_date_utc = datetime.fromisoformat(event.get('date', '').replace('Z', '+00:00'))
-            
-            # Convert UTC to PST (UTC - 8 hours for PST, UTC - 7 for PDT)
-            # For now, using PST (UTC-8). Should check DST but PST is what user wants.
-            pst_offset = timedelta(hours=-8)
-            game_date_pst = game_date_utc + pst_offset
-            
-            game_time = game_date_pst.strftime('%I:%M %p PST')  # e.g., "04:00 PM PST"
-            game_date = game_date_pst.strftime('%b %d, %Y')     # e.g., "Oct 28, 2025"
+            # Extract game time and date - will be enriched by nba_api
+            # ESPN has date but we'll use nba_api for accurate PST times
+            game_time = ''  # Will be filled by _enrich_with_game_times()
+            game_date = ''  # Will be filled by _enrich_with_game_times()
             
             # Force LIVE if started
             if status_id == 1 and (home_score > 0 or away_score > 0 or period > 0):
@@ -321,6 +313,8 @@ class NBADataPipeline:
         """
         Get live games with optimal performance
         
+        Strategy: ESPN for scores (fast) + nba_api for game times (PST conversion)
+        
         Returns:
             List of type-safe GameData objects
         """
@@ -331,11 +325,16 @@ class NBADataPipeline:
             print(f"⚡ Cache hit ({(now - self._cache_timestamp):.2f}s old)")
             return self._cache
         
-        # Fetch from ESPN (PRIMARY)
+        # Fetch from ESPN (PRIMARY - fastest scores!)
         games, metrics = self.espn_client.fetch_games()
         
         if games:
             print(f"✅ ESPN: {len(games)} games in {metrics.response_time_ms:.0f}ms")
+            
+            # ENRICH with game times from nba_api (ESPN doesn't show times properly)
+            if self.fallback_available:
+                games = self._enrich_with_game_times(games)
+            
             self._cache = games
             self._cache_timestamp = now
             return games
@@ -356,6 +355,73 @@ class NBADataPipeline:
             return self._cache
         
         return []
+    
+    def _enrich_with_game_times(self, espn_games: List[GameData]) -> List[GameData]:
+        """
+        Enrich ESPN games with game times from nba_api
+        
+        ESPN games have accurate scores but missing/wrong times
+        nba_api has accurate times for scheduled games
+        
+        Args:
+            espn_games: Games from ESPN API
+        
+        Returns:
+            Games enriched with accurate PST times
+        """
+        try:
+            print(f"   🕐 Enriching with nba_api game times...")
+            
+            # Fetch from nba_api for game times
+            board = self.nba_api_scoreboard.ScoreBoard()
+            nba_data = board.get_dict()
+            
+            if not nba_data or 'scoreboard' not in nba_data:
+                return espn_games
+            
+            nba_games = nba_data['scoreboard'].get('games', [])
+            
+            # Create lookup by team matchup (since game IDs might differ)
+            nba_times = {}
+            for nba_game in nba_games:
+                home = nba_game.get('homeTeam', {}).get('teamTricode', '')
+                away = nba_game.get('awayTeam', {}).get('teamTricode', '')
+                
+                if home and away:
+                    matchup_key = f"{away}@{home}"
+                    
+                    # Get game time from nba_api and convert to PST
+                    game_time_utc = nba_game.get('gameTimeUTC', '')
+                    
+                    if game_time_utc:
+                        from datetime import datetime, timedelta
+                        try:
+                            dt_utc = datetime.fromisoformat(game_time_utc.replace('Z', '+00:00'))
+                            dt_pst = dt_utc - timedelta(hours=8)  # UTC to PST
+                            
+                            nba_times[matchup_key] = {
+                                'game_time': dt_pst.strftime('%I:%M %p PST'),
+                                'game_date': dt_pst.strftime('%b %d, %Y')
+                            }
+                        except:
+                            pass
+            
+            # Enrich ESPN games with nba_api times
+            enriched_count = 0
+            for game in espn_games:
+                matchup_key = f"{game['away_team']}@{game['home_team']}"
+                
+                if matchup_key in nba_times:
+                    game['game_time'] = nba_times[matchup_key]['game_time']
+                    game['game_date'] = nba_times[matchup_key]['game_date']
+                    enriched_count += 1
+            
+            print(f"   ✅ Enriched {enriched_count}/{len(espn_games)} games with PST times")
+            return espn_games
+            
+        except Exception as e:
+            print(f"   ⚠️  Could not enrich times: {e}")
+            return espn_games  # Return original if enrichment fails
     
     def _fetch_fallback(self) -> List[GameData]:
         """nba_api fallback"""
