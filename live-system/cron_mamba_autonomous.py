@@ -244,12 +244,19 @@ def process_live_game(game):
     # 2. Update minute-by-minute win probability (if we have enough data)
     update_win_probability(game_id)
     
-    # 3. Check if Mamba should trigger (Q2 6:00)
-    if period == 2 and clock.startswith('6:0'):
-        print(f"      ⚡ MAMBA TRIGGER DETECTED!")
-        trigger_mamba_prediction(game_id, game)
+    # 3. Check if Mamba should trigger (Q1 11:00 - FIRST trigger!)
+    if period == 1 and clock.startswith('11:0'):
+        print(f"      ⚡ MAMBA Q1 11:00 TRIGGER DETECTED!")
+        trigger_mamba_prediction(game_id, game, trigger_type='Q1_11:00')
+    # Also trigger at Q2 6:00 (traditional spot)
+    elif period == 2 and clock.startswith('6:0'):
+        print(f"      ⚡ MAMBA Q2 6:00 TRIGGER DETECTED!")
+        trigger_mamba_prediction(game_id, game, trigger_type='Q2_6:00')
     else:
-        print(f"      ⏳ Waiting for Q2 6:00 (current: Q{period} {clock})")
+        if period <= 1:
+            print(f"      ⏳ Waiting for Q1 11:00 (current: Q{period} {clock})")
+        else:
+            print(f"      ⏳ Waiting for Q2 6:00 (current: Q{period} {clock})")
 
 
 def fetch_and_store_playbyplay(game_id):
@@ -442,37 +449,49 @@ def update_win_probability(game_id):
         print(f"      ⚠️  Win prob update error: {str(e)[:50]}")
 
 
-def trigger_mamba_prediction(game_id, game):
-    """Trigger Mamba prediction at Q2 6:00"""
+def trigger_mamba_prediction(game_id, game, trigger_type='Q2_6:00'):
+    """Trigger Mamba prediction at Q1 11:00 or Q2 6:00"""
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor()
         
-        # Check if already triggered
+        # Check if already triggered for this type
         cur.execute("""
             SELECT game_id FROM mamba_game_cache 
-            WHERE game_id = %s
-        """, (game_id,))
+            WHERE game_id = %s AND triggered_type = %s
+        """, (game_id, trigger_type))
         
         if cur.fetchone():
-            print(f"      ℹ️  Mamba already ran for this game")
+            print(f"      ℹ️  Mamba already ran for {trigger_type}")
             cur.close()
             conn.close()
             return
         
-        # Get last 18 minutes (1080 seconds) of play-by-play
+        # Determine how much data to use
+        if trigger_type == 'Q1_11:00':
+            time_limit = 600  # 10 minutes max for Q1
+            required_min = 5   # Need at least 5 minutes
+            period_display = 1
+            clock_display = '11:00'
+        else:  # Q2_6:00
+            time_limit = 1080  # 18 minutes max
+            required_min = 10   # Need at least 10 minutes
+            period_display = 2
+            clock_display = '6:00'
+        
+        # Get available play-by-play data
         cur.execute("""
             SELECT home_score, away_score, score_margin, time_elapsed_seconds
             FROM play_by_play
             WHERE game_id = %s
-            AND time_elapsed_seconds <= 1080
+            AND time_elapsed_seconds <= %s
             ORDER BY time_elapsed_seconds ASC
-        """, (game_id,))
+        """, (game_id, time_limit))
         
         pbp_data = cur.fetchall()
         
-        if len(pbp_data) < 10:
-            print(f"      ⚠️  Not enough data ({len(pbp_data)} events, need 10+)")
+        if len(pbp_data) < required_min:
+            print(f"      ⚠️  Not enough data ({len(pbp_data)} events, need {required_min}+)")
             cur.close()
             conn.close()
             return
@@ -486,19 +505,22 @@ def trigger_mamba_prediction(game_id, game):
         # In production, this would load the actual Mamba model
         prediction = features[0]  # Use pattern_mean as proxy
         
-        # Store prediction
+        # Store prediction with trigger type
         cur.execute("""
             INSERT INTO mamba_game_cache (
                 game_id, features, prediction, confidence,
-                triggered_at, period, clock,
+                triggered_at, period, clock, triggered_type,
                 home_team_id, away_team_id,
                 home_score, away_score, current_margin
-            ) VALUES (%s, %s, %s, %s, NOW(), 2, '6:00', %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             game_id,
             json.dumps(features.tolist()),
             float(prediction),
             75.0,  # Placeholder confidence
+            period_display,
+            clock_display,
+            trigger_type,  # Q1_11:00 or Q2_6:00
             str(game['homeTeam']['teamId']),
             str(game['awayTeam']['teamId']),
             game['homeTeam']['score'],
@@ -510,7 +532,7 @@ def trigger_mamba_prediction(game_id, game):
         cur.close()
         conn.close()
         
-        print(f"      ✅ MAMBA PREDICTION: {prediction:+.1f}")
+        print(f"      ✅ MAMBA PREDICTION ({trigger_type}): {prediction:+.1f}")
         print(f"      💾 Stored in mamba_game_cache")
         
     except Exception as e:

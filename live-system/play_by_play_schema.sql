@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS mamba_game_cache (
     triggered_at TIMESTAMP,
     period INTEGER DEFAULT 2,
     clock VARCHAR(10) DEFAULT '6:00',
+    triggered_type VARCHAR(20) DEFAULT 'Q2_6:00',  -- Q1_11:00 or Q2_6:00
     
     -- Game state when triggered
     home_team_id VARCHAR(10),
