@@ -250,9 +250,9 @@ def process_live_game(game):
 
 
 def fetch_and_store_playbyplay(game_id):
-    """Fetch play-by-play from NBA API and store in database"""
+    """Fetch play-by-play from NBA CDN API and store in database"""
     try:
-        # Fetch play-by-play
+        # Use NBA CDN for play-by-play (more reliable than ESPN PBP format)
         pbp_url = f"https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_{game_id}.json"
         response = requests.get(pbp_url, timeout=10)
         
