@@ -3,6 +3,7 @@ import { wsService } from '../services/websocket';
 import { MambaLiveWidget } from './MambaLiveWidget';
 import { LiveSnapshotsWidget } from './LiveSnapshotsWidget';
 import { MambaFeaturesWidget } from './MambaFeaturesWidget';
+import { WinProbabilityWidget } from './WinProbabilityWidget';
 
 interface GameDetailPageProps {
   gameId: string;
@@ -346,6 +347,13 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
           <Show when={game()!.is_live}>
             <div class="mb-6">
               <LiveSnapshotsWidget gameId={props.gameId} />
+            </div>
+          </Show>
+
+          {/* 📈 WIN PROBABILITY TIMELINE */}
+          <Show when={game()!.is_live}>
+            <div class="mb-6">
+              <WinProbabilityWidget gameId={props.gameId} />
             </div>
           </Show>
 
