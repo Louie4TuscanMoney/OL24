@@ -221,7 +221,7 @@ def get_halftime_scores(game_id):
 
 
 def process_live_game(game):
-    """Process a single live game - fetch PBP and check for Mamba trigger"""
+    """Process a single live game - fetch PBP, update win prob, check for Mamba trigger"""
     game_id = game['gameId']
     period = game.get('period', 0)
     clock = game.get('gameClock', '')
@@ -241,7 +241,10 @@ def process_live_game(game):
         print(f"      ⚠️  Failed to store play-by-play")
         return
     
-    # 2. Check if Mamba should trigger (Q2 6:00)
+    # 2. Update minute-by-minute win probability (if we have enough data)
+    update_win_probability(game_id)
+    
+    # 3. Check if Mamba should trigger (Q2 6:00)
     if period == 2 and clock.startswith('6:0'):
         print(f"      ⚡ MAMBA TRIGGER DETECTED!")
         trigger_mamba_prediction(game_id, game)
@@ -354,6 +357,89 @@ def fetch_and_store_playbyplay(game_id):
     except Exception as e:
         print(f"      ❌ PBP error: {str(e)[:50]}")
         return False
+
+
+def update_win_probability(game_id):
+    """Update win probability every minute using Mamba 33 features"""
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor()
+        
+        # Get recent snapshots (last 12 minutes minimum)
+        cur.execute("""
+            SELECT home_score, away_score, score_margin, time_elapsed_seconds, period
+            FROM play_by_play
+            WHERE game_id = %s
+            ORDER BY time_elapsed_seconds DESC
+            LIMIT 12
+        """, (game_id,))
+        
+        pbp_data = cur.fetchall()
+        
+        if len(pbp_data) < 6:  # Need at least 6 minutes
+            return
+        
+        # Reverse to get chronological order
+        pbp_data = list(reversed(pbp_data))
+        
+        # Extract 33 features
+        features = extract_mamba_features_from_pbp(pbp_data)
+        
+        # Simple prediction: pattern_mean as margin prediction
+        margin_pred = features[0]  # pattern_mean
+        
+        # Convert margin to win probability using sigmoid
+        # margin of +5 ≈ 75% home win, -5 ≈ 25% home win (50% at 0)
+        win_prob_home = 1 / (1 + np.exp(-0.2 * margin_pred))  # Sigmoid scaling
+        win_prob_away = 1 - win_prob_home
+        
+        # Get current period and time
+        current_period = pbp_data[-1][4]
+        current_time = pbp_data[-1][3]
+        
+        # Store/update win probability timeline
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS win_probability_timeline (
+                id SERIAL PRIMARY KEY,
+                game_id VARCHAR(20) NOT NULL,
+                period INT NOT NULL,
+                time_elapsed_seconds INT NOT NULL,
+                home_win_prob DECIMAL(5,2) NOT NULL,
+                away_win_prob DECIMAL(5,2) NOT NULL,
+                margin_prediction DECIMAL(5,2),
+                confidence DECIMAL(5,2),
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(game_id, time_elapsed_seconds)
+            )
+        """)
+        
+        cur.execute("""
+            INSERT INTO win_probability_timeline (
+                game_id, period, time_elapsed_seconds, 
+                home_win_prob, away_win_prob, margin_prediction, confidence
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (game_id, time_elapsed_seconds) DO UPDATE SET
+                home_win_prob = EXCLUDED.home_win_prob,
+                away_win_prob = EXCLUDED.away_win_prob,
+                margin_prediction = EXCLUDED.margin_prediction,
+                confidence = EXCLUDED.confidence,
+                created_at = NOW()
+        """, (
+            game_id, current_period, current_time,
+            float(win_prob_home * 100),
+            float(win_prob_away * 100),
+            float(margin_pred),
+            75.0  # Confidence
+        ))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print(f"      📊 Win Prob: Home {win_prob_home*100:.0f}% | Away {win_prob_away*100:.0f}%")
+        
+    except Exception as e:
+        print(f"      ⚠️  Win prob update error: {str(e)[:50]}")
 
 
 def trigger_mamba_prediction(game_id, game):

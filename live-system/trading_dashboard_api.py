@@ -54,7 +54,12 @@ except ImportError:
 
 # ============================================================================
 # ESPN API HELPER - SINGLE SOURCE OF TRUTH FOR ALL LIVE GAME DATA
+# Adds: retries, User-Agent header, and 60s stale-cache fallback to prevent
+# random "no games" gaps when ESPN momentarily hiccups.
 # ============================================================================
+
+from time import time, sleep
+_espn_cache = {"games": [], "ts": 0.0}
 
 def get_live_games_from_espn():
     """
@@ -68,15 +73,36 @@ def get_live_games_from_espn():
     """
     import requests
     
-    try:
-        espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-        response = requests.get(espn_url, timeout=5)
-        
-        if response.status_code != 200:
-            print(f"⚠️ ESPN API returned {response.status_code}")
-            return []
-        
-        data = response.json()
+    espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+    headers = {
+        "User-Agent": "OntologicXYZ/1.0 (+https://ontologicxyz.com)"
+    }
+    max_tries = 3
+    backoffs = [0.2, 0.5, 1.0]
+    last_err = None
+    
+    # Try a few times with short backoff
+    for attempt in range(max_tries):
+        try:
+            response = requests.get(espn_url, timeout=3, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                break
+            else:
+                last_err = f"status {response.status_code}"
+        except Exception as e:
+            last_err = str(e)
+        # Backoff before retry
+        if attempt < len(backoffs):
+            sleep(backoffs[attempt])
+    else:
+        # All attempts failed - use cache if fresh (<=60s)
+        if _espn_cache["games"] and (time() - _espn_cache["ts"]) <= 60:
+            print(f"⚠️ ESPN fetch failed ({last_err}); serving cached games")
+            return _espn_cache["games"]
+        print(f"❌ ESPN fetch failed ({last_err}); no cache available")
+        return []
+    
         espn_events = data.get('events', [])
         
         games = []
@@ -114,14 +140,10 @@ def get_live_games_from_espn():
                 'is_q2_6min': period == 2 and clock.startswith('6:0'),
                 'can_predict': period >= 2
             })
-        
-        return games
-        
-    except Exception as e:
-        print(f"❌ Error fetching ESPN games: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+    # Update cache (successful fetch)
+    _espn_cache["games"] = games
+    _espn_cache["ts"] = time()
+    return games
 
 try:
     from bet_portfolio_manager import BetPortfolioManager
@@ -2470,6 +2492,55 @@ async def get_live_game_data(game_id: str):
             "betonline": betonline_lines,
             "ml_prediction": None,  # Will add if available
             "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/game/{game_id}/win-probability")
+async def get_win_probability_timeline(game_id: str):
+    """
+    Get minute-by-minute win probability timeline for a game
+    Powered by Mamba 33 features
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get win probability timeline
+        cursor.execute("""
+            SELECT period, time_elapsed_seconds, home_win_prob, away_win_prob, 
+                   margin_prediction, confidence, created_at
+            FROM win_probability_timeline
+            WHERE game_id = %s
+            ORDER BY time_elapsed_seconds ASC
+        """, (game_id,))
+        
+        timeline = cursor.fetchall()
+        
+        results = []
+        for row in timeline:
+            results.append({
+                'period': row[0],
+                'time_elapsed': row[1],
+                'home_win_prob': float(row[2]),
+                'away_win_prob': float(row[3]),
+                'margin_prediction': float(row[4]) if row[4] else None,
+                'confidence': float(row[5]) if row[5] else None,
+                'timestamp': row[6].isoformat() if row[6] else None
+            })
+        
+        conn.close()
+        
+        return {
+            'game_id': game_id,
+            'timeline': results,
+            'count': len(results),
+            'latest': results[-1] if results else None
         }
         
     except Exception as e:
