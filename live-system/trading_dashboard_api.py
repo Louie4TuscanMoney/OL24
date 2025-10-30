@@ -2521,7 +2521,39 @@ async def get_game_ml_prediction(game_id: str):
     try:
         cur = conn.cursor()
         
-        # Get latest prediction
+        # Try Mamba cache first (Q2 6:00 predictions)
+        cur.execute("""
+            SELECT 
+                game_id, features, prediction, confidence,
+                triggered_at, period, clock,
+                home_team_id, away_team_id,
+                home_score, away_score, current_margin
+            FROM mamba_game_cache
+            WHERE game_id = %s
+        """, (game_id,))
+        
+        mamba_row = cur.fetchone()
+        if mamba_row:
+            # Return Mamba prediction
+            cur.close()
+            conn.close()
+            return {
+                "game_id": game_id,
+                "prediction": float(mamba_row[2]),
+                "confidence": float(mamba_row[3]),
+                "triggered_at": mamba_row[4].isoformat() if mamba_row[4] else None,
+                "period": mamba_row[5],
+                "clock": mamba_row[6],
+                "features": json.loads(mamba_row[1]) if mamba_row[1] else [],
+                "home_team_id": mamba_row[7],
+                "away_team_id": mamba_row[8],
+                "home_score": mamba_row[9],
+                "away_score": mamba_row[10],
+                "margin": mamba_row[11],
+                "is_q2_6min": True
+            }
+        
+        # Fall back to ml_predictions
         cur.execute("""
             SELECT 
                 point_forecast,
