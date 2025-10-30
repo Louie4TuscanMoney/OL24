@@ -61,7 +61,7 @@ except ImportError:
 from time import time, sleep
 _espn_cache = {"games": [], "ts": 0.0}
 
-def get_live_games_from_espn():
+def get_live_games_from_espn(include_upcoming=True, include_completed=False):
     """
     Get live games from ESPN API - HARDENED FOR ZERO DOWNTIME
     
@@ -73,6 +73,10 @@ def get_live_games_from_espn():
     - 5 minute emergency cache (survives outages)
     - Data validation (sanity checks)
     - Never returns empty during games (prefers stale data)
+    
+    Args:
+        include_upcoming: Include scheduled games (default: True)
+        include_completed: Include finished games (default: False)
     
     Returns:
         List of games in standardized format
@@ -131,6 +135,24 @@ def get_live_games_from_espn():
             # Determine if live
             state_type = status.get('type', {}).get('state', 'pre')
             is_live = state_type == 'in'
+            
+            # Filter games based on parameters
+            if state_type == 'post' and not include_completed:
+                continue  # Skip completed games
+            if state_type not in ['in', 'pre']:
+                continue  # Only include live or upcoming
+            
+            # Skip games from previous days (only today's games)
+            from datetime import datetime
+            game_date_str = event.get('date', '')
+            if game_date_str:
+                try:
+                    game_date = datetime.fromisoformat(game_date_str.replace('Z', '+00:00')).date()
+                    today = datetime.now().date()
+                    if game_date < today:
+                        continue  # Skip past days
+                except:
+                    pass  # If parsing fails, include the game
             
             # Parse scores with validation
             try:
