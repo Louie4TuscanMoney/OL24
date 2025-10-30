@@ -542,6 +542,109 @@ async def approve_request(request_id: int):
         return JSONResponse({"detail": "Error approving request"}, status_code=500)
 
 
+@app.get("/api/trading/live-opportunities")
+async def get_live_trading_opportunities():
+    """
+    Get ALL live games with trading opportunities (not just Mamba predictions)
+    
+    Returns live games that can be traded on, regardless of Mamba trigger status
+    """
+    try:
+        # Get all live games from ESPN
+        live_games = get_live_games_from_espn(include_upcoming=False, include_completed=False)
+        
+        opportunities = []
+        for game in live_games:
+            if not game.get('is_live'):
+                continue
+                
+            # Try to get Mamba prediction if available
+            conn = get_db_connection()
+            if not conn:
+                continue
+                
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT prediction, confidence, triggered_at
+                FROM mamba_game_cache
+                WHERE game_id = %s
+                LIMIT 1
+            """, (game['game_id'],))
+            
+            mamba_data = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            
+            # Build opportunity
+            opportunity = {
+                'game_id': game['game_id'],
+                'home_team': game.get('home_team', 'HOME'),
+                'away_team': game.get('away_team', 'AWAY'),
+                'current_score': f"{game.get('score_away', 0)}-{game.get('score_home', 0)}",
+                'quarter': game.get('quarter', 1),
+                'time_remaining': game.get('time_remaining', game.get('clock', '0:00')),
+                'mamba_prediction': None,
+                'mamba_confidence': None,
+                'home_win_probability': 50.0,  # Default
+                'opportunities': []
+            }
+            
+            # Add Mamba data if available
+            if mamba_data:
+                prediction = float(mamba_data[0])
+                confidence = float(mamba_data[1])
+                
+                # Convert prediction to win probability
+                home_win_prob = min(95, max(5, 50 + (prediction * 2)))  # Rough conversion
+                away_win_prob = 100 - home_win_prob
+                
+                opportunity['mamba_prediction'] = prediction
+                opportunity['mamba_confidence'] = confidence
+                opportunity['home_win_probability'] = round(home_win_prob, 1)
+                
+                # Add trading opportunities
+                opportunity['opportunities'].extend([
+                    {'type': 'home_spread', 'odds': -110, 'ev': 5.0, 'recommendation': 'MONITOR'},
+                    {'type': 'away_spread', 'odds': -110, 'ev': 5.0, 'recommendation': 'MONITOR'}
+                ])
+            
+            opportunities.append(opportunity)
+        
+        return {
+            'count': len(opportunities),
+            'opportunities': opportunities,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "opportunities": []}
+
+
+@app.get("/api/trading/analyze-bet")
+async def analyze_bet_trade():
+    """Analyze a bet for expected value"""
+    # TODO: Implement bet analysis
+    return {"message": "Coming soon"}
+
+
+@app.post("/api/trading/place-bet")
+async def place_bet_trade():
+    """Place a bet"""
+    # TODO: Implement bet placement
+    return {"message": "Coming soon"}
+
+
+@app.get("/api/trading/performance")
+async def get_trading_performance():
+    """Get trading performance stats"""
+    return {
+        'total_bets': 0,
+        'win_rate': 0.0,
+        'total_profit': 0.0,
+        'recent_bets': []
+    }
+
+
 @app.get("/api/live-games")
 async def get_live_games():
     """
