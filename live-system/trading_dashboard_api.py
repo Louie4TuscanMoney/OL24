@@ -1603,6 +1603,7 @@ async def get_standings():
         standings_data = {"East": [], "West": []}
         for row in cursor.fetchall():
             team_data = {
+                "team": row[0],  # abbreviation
                 "abbreviation": row[0],
                 "full_name": row[1],
                 "rank": row[3],
