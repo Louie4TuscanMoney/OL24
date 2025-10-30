@@ -52,6 +52,77 @@ except ImportError:
     UserAuthManager = None
     print("⚠️ UserAuthManager not available")
 
+# ============================================================================
+# ESPN API HELPER - SINGLE SOURCE OF TRUTH FOR ALL LIVE GAME DATA
+# ============================================================================
+
+def get_live_games_from_espn():
+    """
+    Get live games from ESPN API - ONLY SOURCE
+    
+    This is the single source of truth for all live game data.
+    No caching, no fallbacks, just pure ESPN real-time data.
+    
+    Returns:
+        List of games in standardized format
+    """
+    import requests
+    
+    try:
+        espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+        response = requests.get(espn_url, timeout=5)
+        
+        if response.status_code != 200:
+            print(f"⚠️ ESPN API returned {response.status_code}")
+            return []
+        
+        data = response.json()
+        espn_events = data.get('events', [])
+        
+        games = []
+        for event in espn_events:
+            competition = event.get('competitions', [{}])[0]
+            status = event.get('status', {})
+            competitors = competition.get('competitors', [])
+            
+            # Find home and away teams
+            home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
+            away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+            
+            # Parse period and clock
+            period = status.get('period', 0)
+            clock = status.get('displayClock', '')
+            
+            # Determine if live
+            state_type = status.get('type', {}).get('state', 'pre')
+            is_live = state_type == 'in'
+            
+            games.append({
+                'game_id': event.get('id'),
+                'home_team': home_team.get('team', {}).get('abbreviation', ''),
+                'away_team': away_team.get('team', {}).get('abbreviation', ''),
+                'score_home': int(home_team.get('score', 0)),
+                'score_away': int(away_team.get('score', 0)),
+                'quarter': period,
+                'time_remaining': clock,
+                'clock': clock,
+                'is_live': is_live,
+                'status': 2 if is_live else (3 if state_type == 'post' else 1),
+                'status_text': status.get('type', {}).get('shortDetail', ''),
+                'game_time': status.get('type', {}).get('shortDetail', ''),
+                'game_date': event.get('date', ''),
+                'is_q2_6min': period == 2 and clock.startswith('6:0'),
+                'can_predict': period >= 2
+            })
+        
+        return games
+        
+    except Exception as e:
+        print(f"❌ Error fetching ESPN games: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
 try:
     from bet_portfolio_manager import BetPortfolioManager
 except ImportError:
@@ -263,19 +334,19 @@ async def debug_system_status():
         status["startup_complete"] = False
         status["error"] = "Trading engine not initialized!"
     
-    if nba_api:
-        try:
-            games = nba_api.get_todays_games()
-            status["recent_games_count"] = len(games)
-            # Show first game details
-            if games:
-                status["sample_game"] = {
-                    "matchup": f"{games[0].get('away_team')} @ {games[0].get('home_team')}",
-                    "period": games[0].get("period"),
-                    "can_predict": games[0].get("can_predict", False)
-                }
-        except Exception as e:
-            status["games_error"] = str(e)
+    # Always use ESPN API for game status
+    try:
+        games = get_live_games_from_espn()
+        status["recent_games_count"] = len(games)
+        # Show first game details
+        if games:
+            status["sample_game"] = {
+                "matchup": f"{games[0].get('away_team')} @ {games[0].get('home_team')}",
+                "period": games[0].get("quarter"),
+                "can_predict": games[0].get("can_predict", False)
+            }
+    except Exception as e:
+        status["games_error"] = str(e)
     
     return status
 
@@ -372,67 +443,13 @@ async def approve_request(request_id: int):
 @app.get("/api/live-games")
 async def get_live_games():
     """
-    Get current live games with PST times (REAL-TIME from ESPN API)
+    Get current live games with PST times (REAL-TIME from ESPN API ONLY)
     
     Returns:
         List of live games with scores and game times in PST
     """
-    try:
-        # Use ESPN API for real-time data (most reliable)
-        import requests
-        
-        espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-        response = requests.get(espn_url, timeout=5)
-        
-        if response.status_code != 200:
-            print(f"ESPN API returned {response.status_code}")
-            games = []
-        else:
-            data = response.json()
-            espn_games = data.get('events', [])
-            
-            # Map to our format
-            games = []
-            for event in espn_games:
-                competition = event.get('competitions', [{}])[0]
-                status = event.get('status', {})
-                competitors = competition.get('competitors', [])
-                
-                # Find home and away teams
-                home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
-                away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
-                
-                # Parse period and clock
-                period = status.get('period', 0)
-                clock = status.get('displayClock', '')
-                
-                # Determine if live
-                state_type = status.get('type', {}).get('state', 'pre')
-                is_live = state_type == 'in'
-                
-                games.append({
-                    'game_id': event.get('id'),
-                    'home_team': home_team.get('team', {}).get('abbreviation', ''),
-                    'away_team': away_team.get('team', {}).get('abbreviation', ''),
-                    'score_home': int(home_team.get('score', 0)),
-                    'score_away': int(away_team.get('score', 0)),
-                    'quarter': period,
-                    'time_remaining': clock,
-                    'clock': clock,
-                    'is_live': is_live,
-                    'status': 2 if is_live else (3 if state_type == 'post' else 1),
-                    'status_text': status.get('type', {}).get('shortDetail', ''),
-                    'game_time': status.get('type', {}).get('shortDetail', ''),
-                    'game_date': event.get('date', ''),
-                    'is_q2_6min': period == 2 and clock.startswith('6:0'),
-                    'can_predict': period >= 2
-                })
-            
-    except Exception as e:
-        print(f"Error fetching live games from ESPN: {e}")
-        import traceback
-        traceback.print_exc()
-        games = []
+    # Use our ESPN-only helper function
+    games = get_live_games_from_espn()
     
     # Enrich games with time data from database
     conn = get_db_connection()
@@ -1227,62 +1244,17 @@ async def build_complete_message() -> dict:
     """
     try:
         # Get live games (FAST - every call)
-        # 🔥 REAL-TIME: Use ESPN API directly (most reliable!)
-        try:
-            import requests
-            
-            espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-            response = requests.get(espn_url, timeout=5)
-            
-            if response.status_code != 200:
-                print(f"⚠️ ESPN API returned {response.status_code}")
-                live_games = []
-            else:
-                data = response.json()
-                espn_games = data.get('events', [])
-                
-                # Map to frontend format (crucial!)
-                live_games = []
-                for event in espn_games:
-                    competition = event.get('competitions', [{}])[0]
-                    status = event.get('status', {})
-                    competitors = competition.get('competitors', [])
-                    
-                    # Find home and away teams
-                    home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
-                    away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
-                    
-                    # Parse period and clock
-                    period = status.get('period', 0)
-                    clock = status.get('displayClock', '')
-                    
-                    # Determine if live
-                    state_type = status.get('type', {}).get('state', 'pre')
-                    is_live = state_type == 'in'
-                    
-                    # Map ESPN format to frontend format
-                    game_mapped = {
-                        'game_id': event.get('id'),
-                        'home_team': home_team.get('team', {}).get('abbreviation', ''),
-                        'away_team': away_team.get('team', {}).get('abbreviation', ''),
-                        'score_home': int(home_team.get('score', 0)),  # Frontend expects score_home
-                        'score_away': int(away_team.get('score', 0)),  # Frontend expects score_away
-                        'quarter': period,  # Frontend expects quarter
-                        'time_remaining': clock,  # Frontend expects time_remaining
-                        'clock': clock,  # Also include clock
-                        'is_live': is_live,  # Frontend expects is_live
-                        'status': 2 if is_live else (3 if state_type == 'post' else 1),
-                        'status_text': status.get('type', {}).get('shortDetail', ''),
-                        'game_time': status.get('type', {}).get('shortDetail', ''),
-                        'game_date': event.get('date', '')
-                    }
-                    live_games.append(game_mapped)
-                
-        except Exception as e:
-            print(f"⚠️ Error fetching real-time games from ESPN for WebSocket: {e}")
-            import traceback
-            traceback.print_exc()
-            live_games = []
+        # 🔥 REAL-TIME: Use ESPN API helper (single source of truth!)
+        live_games = get_live_games_from_espn()
+        
+        # Log what we're sending
+        if live_games:
+            print(f"   📊 WebSocket: Broadcasting {len(live_games)} games from ESPN")
+            for game in live_games:
+                if game.get('is_live'):
+                    print(f"      🔴 {game['away_team']} {game['score_away']} @ {game['home_team']} {game['score_home']} - Q{game['quarter']} {game['time_remaining']}")
+        else:
+            print(f"   ⚠️ WebSocket: No games from ESPN (API may be down)")
         
         # Get betting opportunities (checks Q2 6:00 window)
         # Model only predicts when game has 18+ minutes of play
@@ -2460,12 +2432,9 @@ async def get_live_game_data(game_id: str):
     - BetOnline spread ladder
     - ML prediction
     """
-    if not trading_engine:
-        return {"error": "Trading engine not available"}
-    
     try:
-        # Get current game state
-        games = trading_engine.nba_api.get_todays_games()
+        # Get current game state from ESPN
+        games = get_live_games_from_espn()
         game = next((g for g in games if g['game_id'] == game_id), None)
         
         if not game:
