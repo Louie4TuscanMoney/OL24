@@ -1933,7 +1933,8 @@ async def get_nba_schedule(days_ahead: int = 7):
             games.append({
                 "game_id": row[0],
                 "date": game_date.strftime('%Y-%m-%d'),
-                "time": time_pst,  # PST formatted
+                "time": time_pst,  # PST formatted (backward compat)
+                "time_pst": time_pst,  # Frontend expects this
                 "time_utc": time_utc,  # UTC backup
                 "home_team": {
                     "team_id": row[6],
