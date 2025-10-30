@@ -117,8 +117,7 @@ def fetch_all_teams_detailed():
                 continue
             
             pts_total = int(ppg * games_played)
-            reb_total = int(reb_pg * games_played)
-            ast_total = int(ast_pg * games_played)
+            pts_allowed_total = int(opp_ppg * games_played)
             
             # Update database with ALL stats
             cur.execute("""
@@ -127,15 +126,14 @@ def fetch_all_teams_detailed():
                     wins = %s,
                     losses = %s,
                     pts_total = %s,
-                    reb_total = %s,
-                    ast_total = %s,
+                    pts_allowed_total = %s,
                     offensive_rating = %s,
                     defensive_rating = %s,
                     updated_at = NOW()
                 WHERE team_id = %s AND season_id = '2025-26'
             """, (
                 games_played, wins, losses,
-                pts_total, reb_total, ast_total,
+                pts_total, pts_allowed_total,
                 ppg, opp_ppg,
                 our_team_id
             ))
