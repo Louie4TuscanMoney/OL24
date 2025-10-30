@@ -250,91 +250,105 @@ def process_live_game(game):
 
 
 def fetch_and_store_playbyplay(game_id):
-    """Fetch play-by-play from NBA CDN API and store in database"""
+    """Store live scores every minute (simpler than parsing play-by-play)"""
     try:
-        # Use NBA CDN for play-by-play (more reliable than ESPN PBP format)
-        pbp_url = f"https://cdn.nba.com/static/json/liveData/playbyplay/playbyplay_{game_id}.json"
-        response = requests.get(pbp_url, timeout=10)
+        # Get current game state from ESPN
+        espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+        response = requests.get(espn_url, timeout=10)
         
         if response.status_code != 200:
             return False
         
-        pbp_data = response.json()
-        actions = pbp_data.get('game', {}).get('actions', [])
+        data = response.json()
+        events = data.get('events', [])
         
-        if not actions:
+        # Find this specific game
+        game = None
+        for event in events:
+            if str(event.get('id')) == str(int(game_id)):  # Match ESPN game ID format
+                game = event
+                break
+        
+        if not game:
+            print(f"      ⚠️  Game {game_id} not found in ESPN data")
             return False
         
-        # Store in database
+        competition = game.get('competitions', [{}])[0]
+        status = game.get('status', {})
+        competitors = competition.get('competitors', [])
+        
+        home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
+        away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+        
+        home_score = int(home_team.get('score', 0))
+        away_score = int(away_team.get('score', 0))
+        period = status.get('period', 0)
+        clock = status.get('displayClock', '')
+        
+        # Calculate time elapsed
+        if ':' in clock:
+            parts = clock.split(':')
+            mins = int(parts[0])
+            secs = int(parts[1]) if len(parts) > 1 else 0
+            period_seconds = 720 - (mins * 60 + secs)
+        else:
+            period_seconds = 0
+        
+        time_elapsed = (period - 1) * 720 + period_seconds
+        
+        # Store in database - create a unique timestamp for this minute
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor()
         
-        stored_count = 0
+        # Create a unique event_num based on current minute
+        # This way we store one snapshot per minute
+        event_num = int(time_elapsed / 60)  # Minute number (0, 1, 2, ...)
         
-        for action in actions:
-            try:
-                # Calculate time elapsed
-                period = action.get('period', 1)
-                clock = action.get('clock', '12:00')
-                
-                # Convert clock to seconds (e.g., "6:34" -> 394)
-                if ':' in clock:
-                    parts = clock.split(':')
-                    mins = int(parts[0])
-                    secs = int(parts[1]) if len(parts) > 1 else 0
-                    period_seconds = 720 - (mins * 60 + secs)  # Seconds into period
-                else:
-                    period_seconds = 0
-                
-                time_elapsed = (period - 1) * 720 + period_seconds
-                
-                # Get scores
-                home_score = action.get('scoreHome', 0) or 0
-                away_score = action.get('scoreAway', 0) or 0
-                
-                # Insert into database
-                cur.execute("""
-                    INSERT INTO play_by_play (
-                        game_id, event_num, period, clock,
-                        time_elapsed_seconds, event_type,
-                        description, player_id, team_id,
-                        home_score, away_score, score_margin,
-                        event_data
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    )
-                    ON CONFLICT (game_id, event_num) DO UPDATE SET
-                        home_score = EXCLUDED.home_score,
-                        away_score = EXCLUDED.away_score,
-                        score_margin = EXCLUDED.score_margin,
-                        clock = EXCLUDED.clock,
-                        time_elapsed_seconds = EXCLUDED.time_elapsed_seconds
-                """, (
-                    game_id,
-                    action.get('actionNumber', 0),
-                    period,
-                    clock,
-                    time_elapsed,
-                    action.get('actionType', ''),
-                    action.get('description', ''),
-                    str(action.get('personId', '')) if action.get('personId') else None,
-                    str(action.get('teamId', '')) if action.get('teamId') else None,
-                    home_score,
-                    away_score,
-                    home_score - away_score,
-                    json.dumps(action)
-                ))
-                
-                stored_count += 1
-                
-            except Exception as e:
-                continue
+        # Insert or update current minute's score snapshot
+        cur.execute("""
+            INSERT INTO play_by_play (
+                game_id, event_num, period, clock,
+                time_elapsed_seconds, event_type,
+                description, player_id, team_id,
+                home_score, away_score, score_margin,
+                event_data
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (game_id, event_num) DO UPDATE SET
+                home_score = EXCLUDED.home_score,
+                away_score = EXCLUDED.away_score,
+                score_margin = EXCLUDED.score_margin,
+                clock = EXCLUDED.clock,
+                time_elapsed_seconds = EXCLUDED.time_elapsed_seconds,
+                period = EXCLUDED.period
+        """, (
+            game_id,
+            event_num,
+            period,
+            clock,
+            time_elapsed,
+            'score_snapshot',  # event_type
+            f'Score at Q{period} {clock}',  # description
+            None,  # player_id
+            None,  # team_id
+            home_score,
+            away_score,
+            home_score - away_score,
+            json.dumps({
+                'home_score': home_score,
+                'away_score': away_score,
+                'period': period,
+                'clock': clock,
+                'time_elapsed': time_elapsed
+            })
+        ))
         
         conn.commit()
         cur.close()
         conn.close()
         
-        print(f"      ✅ Stored {stored_count} play-by-play events")
+        print(f"      ✅ Stored score snapshot (minute {event_num}, {time_elapsed}s elapsed)")
         return True
         
     except Exception as e:
