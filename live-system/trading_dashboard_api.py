@@ -179,6 +179,17 @@ def get_live_games_from_espn(include_upcoming=True, include_completed=False):
                 score_home = 0
                 score_away = 0
             
+            # Parse date from ESPN ISO format
+            espn_date = event.get('date', '')
+            date_parsed = None
+            if espn_date:
+                try:
+                    from datetime import datetime
+                    date_obj = datetime.fromisoformat(espn_date.replace('Z', '+00:00'))
+                    date_parsed = date_obj.strftime('%Y-%m-%d')  # YYYY-MM-DD for frontend
+                except:
+                    pass
+            
             games.append({
                 'game_id': game_id,
                 'home_team': home_abbr,
@@ -192,7 +203,8 @@ def get_live_games_from_espn(include_upcoming=True, include_completed=False):
                 'status': 2 if is_live else (3 if state_type == 'post' else 1),
                 'status_text': status.get('type', {}).get('shortDetail', ''),
                 'game_time': status.get('type', {}).get('shortDetail', ''),
-                'game_date': event.get('date', ''),
+                'date': date_parsed,  # Frontend expects this
+                'game_date': espn_date,  # Keep original for backend
                 'is_q2_6min': period == 2 and clock.startswith('6:0'),
                 'can_predict': period >= 2
             })
