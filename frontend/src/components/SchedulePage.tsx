@@ -58,6 +58,11 @@ const SchedulePage: Component = () => {
 
   onMount(() => {
     fetchSchedule();
+    
+    // Auto-refresh every 5 minutes
+    const refreshInterval = setInterval(fetchSchedule, 5 * 60 * 1000);
+    
+    return () => clearInterval(refreshInterval);
   });
 
   const formatDate = (dateStr: string) => {

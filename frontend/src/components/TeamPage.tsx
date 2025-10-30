@@ -40,7 +40,7 @@ const TeamPage: Component<Props> = (props) => {
 
   const [teamStats, setTeamStats] = createSignal<any>(null);
 
-  onMount(async () => {
+  const fetchTeamData = async () => {
     try {
       // Fetch team info from teams API
       const teamsRes = await fetch(`${API_BASE}/api/stats/teams`);
@@ -68,6 +68,15 @@ const TeamPage: Component<Props> = (props) => {
       console.error('Error fetching team data:', error);
       setLoading(false);
     }
+  };
+
+  onMount(async () => {
+    await fetchTeamData();
+    
+    // Auto-refresh every 5 minutes
+    const refreshInterval = setInterval(fetchTeamData, 5 * 60 * 1000);
+    
+    return () => clearInterval(refreshInterval);
   });
 
   return (

@@ -34,7 +34,7 @@ const StatsPage: Component<Props> = (props) => {
 
   const API_BASE = 'https://ol24-production.up.railway.app';
 
-  onMount(async () => {
+  const fetchData = async () => {
     try {
       console.log('📊 Fetching stats from:', API_BASE);
       
@@ -55,6 +55,15 @@ const StatsPage: Component<Props> = (props) => {
       console.error('❌ Error fetching stats:', error);
       setLoading(false);
     }
+  };
+
+  onMount(async () => {
+    await fetchData();
+    
+    // Auto-refresh every 5 minutes
+    const refreshInterval = setInterval(fetchData, 5 * 60 * 1000);
+    
+    return () => clearInterval(refreshInterval);
   });
 
   return (
