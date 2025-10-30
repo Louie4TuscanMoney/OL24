@@ -140,8 +140,23 @@ const Dashboard: Component<DashboardProps> = (props) => {
   // Live games
   const liveGames = () => gamesList().filter(g => g.is_live);
 
-  // Upcoming games - use scheduledGames from API, not WebSocket
-  const upcomingGames = () => scheduledGames().filter(g => g.status !== 'Final' && g.status !== 'Live');
+  // Upcoming games - use scheduledGames from API, not WebSocket, sorted by time
+  const upcomingGames = () => {
+    const filtered = scheduledGames().filter(g => g.status !== 'Final' && g.status !== 'Live');
+    
+    // Sort by date and time (earliest first)
+    return filtered.sort((a, b) => {
+      // First sort by date
+      if (a.date !== b.date) {
+        return a.date.localeCompare(b.date);
+      }
+      
+      // Then by time
+      const timeA = a.time_pst || a.time || '';
+      const timeB = b.time_pst || b.time || '';
+      return timeA.localeCompare(timeB);
+    });
+  };
 
   // Total edges detected
   const edgesCount = () => 
