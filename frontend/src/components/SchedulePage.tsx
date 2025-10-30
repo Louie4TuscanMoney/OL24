@@ -42,6 +42,13 @@ const SchedulePage: Component = () => {
       
       let gamesList = data.games || [];
       
+      // Filter out past games (only show today and future)
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      gamesList = gamesList.filter((g: ScheduledGame) => {
+        const gameDate = g.date || '';
+        return gameDate >= today;
+      });
+      
       // Filter by team if selected
       if (selectedTeam()) {
         gamesList = gamesList.filter((g: ScheduledGame) => 
