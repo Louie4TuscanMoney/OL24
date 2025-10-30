@@ -20,6 +20,8 @@ interface Props {
 const ScheduleGameModal: Component<Props> = (props) => {
   const [homeDepth, setHomeDepth] = createSignal<any[]>([]);
   const [awayDepth, setAwayDepth] = createSignal<any[]>([]);
+  const [homeRecord, setHomeRecord] = createSignal<any>(null);
+  const [awayRecord, setAwayRecord] = createSignal<any>(null);
   const [loading, setLoading] = createSignal(true);
 
   const API_BASE = 'https://ol24-production.up.railway.app';
@@ -37,6 +39,19 @@ const ScheduleGameModal: Component<Props> = (props) => {
 
       setHomeDepth(homeData.starters || []);
       setAwayDepth(awayData.starters || []);
+
+      // Fetch team records from all teams endpoint
+      const teamsRes = await fetch(`${API_BASE}/api/stats/teams`);
+      const teamsData = await teamsRes.json();
+      const teams = teamsData.teams || [];
+
+      // Find home and away team records
+      const homeTeam = teams.find((t: any) => t.abbreviation === props.game.home_team.abbr);
+      const awayTeam = teams.find((t: any) => t.abbreviation === props.game.away_team.abbr);
+
+      setHomeRecord(homeTeam || null);
+      setAwayRecord(awayTeam || null);
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching game details:', error);
@@ -105,13 +120,28 @@ const ScheduleGameModal: Component<Props> = (props) => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
               {/* Away Team Lineup */}
               <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-                <div class="flex items-center gap-3 mb-6">
+                <div class="flex items-center gap-3 mb-4">
                   <Show when={props.game.away_team.logo}>
                     <img src={props.game.away_team.logo} alt={props.game.away_team.abbr} class="w-16 h-16" />
                   </Show>
-                  <div>
+                  <div class="flex-1">
                     <h2 class="text-2xl font-bold text-white">{props.game.away_team.name}</h2>
                     <p class="text-gray-400">Projected Lineup</p>
+                    <Show when={awayRecord()}>
+                      <div class="flex items-center gap-4 mt-2">
+                        <span class="text-green-400 font-bold text-lg">
+                          {awayRecord()!.wins}-{awayRecord()!.losses}
+                        </span>
+                        <span class="text-gray-500 text-sm">
+                          PPG: {awayRecord()!.ppg.toFixed(1)}
+                        </span>
+                        <Show when={awayRecord()!.net_rating !== undefined}>
+                          <span class={`text-sm font-semibold ${awayRecord()!.net_rating > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            Net: {awayRecord()!.net_rating > 0 ? '+' : ''}{awayRecord()!.net_rating.toFixed(1)}
+                          </span>
+                        </Show>
+                      </div>
+                    </Show>
                   </div>
                 </div>
                 <div class="space-y-3">
@@ -139,13 +169,28 @@ const ScheduleGameModal: Component<Props> = (props) => {
 
               {/* Home Team Lineup */}
               <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-                <div class="flex items-center gap-3 mb-6">
+                <div class="flex items-center gap-3 mb-4">
                   <Show when={props.game.home_team.logo}>
                     <img src={props.game.home_team.logo} alt={props.game.home_team.abbr} class="w-16 h-16" />
                   </Show>
-                  <div>
+                  <div class="flex-1">
                     <h2 class="text-2xl font-bold text-white">{props.game.home_team.name}</h2>
                     <p class="text-gray-400">Projected Lineup</p>
+                    <Show when={homeRecord()}>
+                      <div class="flex items-center gap-4 mt-2">
+                        <span class="text-green-400 font-bold text-lg">
+                          {homeRecord()!.wins}-{homeRecord()!.losses}
+                        </span>
+                        <span class="text-gray-500 text-sm">
+                          PPG: {homeRecord()!.ppg.toFixed(1)}
+                        </span>
+                        <Show when={homeRecord()!.net_rating !== undefined}>
+                          <span class={`text-sm font-semibold ${homeRecord()!.net_rating > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            Net: {homeRecord()!.net_rating > 0 ? '+' : ''}{homeRecord()!.net_rating.toFixed(1)}
+                          </span>
+                        </Show>
+                      </div>
+                    </Show>
                   </div>
                 </div>
                 <div class="space-y-3">
