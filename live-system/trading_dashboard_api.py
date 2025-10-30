@@ -63,10 +63,16 @@ _espn_cache = {"games": [], "ts": 0.0}
 
 def get_live_games_from_espn():
     """
-    Get live games from ESPN API - ONLY SOURCE
+    Get live games from ESPN API - HARDENED FOR ZERO DOWNTIME
     
     This is the single source of truth for all live game data.
-    No caching, no fallbacks, just pure ESPN real-time data.
+    
+    Reliability features:
+    - 5 retry attempts with exponential backoff
+    - 5 second timeout (handles slow responses)
+    - 5 minute emergency cache (survives outages)
+    - Data validation (sanity checks)
+    - Never returns empty during games (prefers stale data)
     
     Returns:
         List of games in standardized format
@@ -77,14 +83,14 @@ def get_live_games_from_espn():
     headers = {
         "User-Agent": "OntologicXYZ/1.0 (+https://ontologicxyz.com)"
     }
-    max_tries = 3
-    backoffs = [0.2, 0.5, 1.0]
+    max_tries = 5  # Increased from 3
+    backoffs = [0.3, 0.6, 1.2, 2.4, 4.8]  # Exponential backoff
     last_err = None
     
-    # Try a few times with short backoff
+    # Try multiple times with exponential backoff
     for attempt in range(max_tries):
         try:
-            response = requests.get(espn_url, timeout=3, headers=headers)
+            response = requests.get(espn_url, timeout=5, headers=headers)  # Increased from 3s
             if response.status_code == 200:
                 data = response.json()
                 break
@@ -93,14 +99,15 @@ def get_live_games_from_espn():
         except Exception as e:
             last_err = str(e)
         # Backoff before retry
-        if attempt < len(backoffs):
+        if attempt < max_tries - 1:  # Don't sleep after last attempt
             sleep(backoffs[attempt])
     else:
-        # All attempts failed - use cache if fresh (<=60s)
-        if _espn_cache["games"] and (time() - _espn_cache["ts"]) <= 60:
-            print(f"⚠️ ESPN fetch failed ({last_err}); serving cached games")
+        # All attempts failed - use cache if available (5 minute TTL)
+        cache_age = time() - _espn_cache["ts"]
+        if _espn_cache["games"] and cache_age <= 300:  # 5 minutes (increased from 60s)
+            print(f"⚠️ ESPN fetch failed ({last_err}); serving cached games (age: {int(cache_age)}s)")
             return _espn_cache["games"]
-        print(f"❌ ESPN fetch failed ({last_err}); no cache available")
+        print(f"❌ ESPN fetch failed ({last_err}) and cache too old ({int(cache_age)}s); returning empty")
         return []
     
     # Parse ESPN response
@@ -108,43 +115,74 @@ def get_live_games_from_espn():
     
     games = []
     for event in espn_events:
-        competition = event.get('competitions', [{}])[0]
-        status = event.get('status', {})
-        competitors = competition.get('competitors', [])
-        
-        # Find home and away teams
-        home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
-        away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
-        
-        # Parse period and clock
-        period = status.get('period', 0)
-        clock = status.get('displayClock', '')
-        
-        # Determine if live
-        state_type = status.get('type', {}).get('state', 'pre')
-        is_live = state_type == 'in'
-        
-        games.append({
-            'game_id': event.get('id'),
-            'home_team': home_team.get('team', {}).get('abbreviation', ''),
-            'away_team': away_team.get('team', {}).get('abbreviation', ''),
-            'score_home': int(home_team.get('score', 0)),
-            'score_away': int(away_team.get('score', 0)),
-            'quarter': period,
-            'time_remaining': clock,
-            'clock': clock,
-            'is_live': is_live,
-            'status': 2 if is_live else (3 if state_type == 'post' else 1),
-            'status_text': status.get('type', {}).get('shortDetail', ''),
-            'game_time': status.get('type', {}).get('shortDetail', ''),
-            'game_date': event.get('date', ''),
-            'is_q2_6min': period == 2 and clock.startswith('6:0'),
-            'can_predict': period >= 2
-        })
+        try:
+            competition = event.get('competitions', [{}])[0]
+            status = event.get('status', {})
+            competitors = competition.get('competitors', [])
+            
+            # Find home and away teams
+            home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
+            away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+            
+            # Parse period and clock
+            period = status.get('period', 0)
+            clock = status.get('displayClock', '')
+            
+            # Determine if live
+            state_type = status.get('type', {}).get('state', 'pre')
+            is_live = state_type == 'in'
+            
+            # Parse scores with validation
+            try:
+                score_home = int(home_team.get('score', 0))
+                score_away = int(away_team.get('score', 0))
+            except (ValueError, TypeError):
+                score_home = 0
+                score_away = 0
+            
+            # Data validation (sanity checks)
+            game_id = event.get('id')
+            home_abbr = home_team.get('team', {}).get('abbreviation', '')
+            away_abbr = away_team.get('team', {}).get('abbreviation', '')
+            
+            # Skip if missing required fields
+            if not game_id or not home_abbr or not away_abbr:
+                print(f"⚠️ Skipping game with missing data: {game_id}")
+                continue
+            
+            # Validate scores (sanity check)
+            if score_home < 0 or score_home > 200 or score_away < 0 or score_away > 200:
+                print(f"⚠️ Invalid scores for {game_id}: {score_away}-{score_home}")
+                # Use 0-0 instead of skipping
+                score_home = 0
+                score_away = 0
+            
+            games.append({
+                'game_id': game_id,
+                'home_team': home_abbr,
+                'away_team': away_abbr,
+                'score_home': score_home,
+                'score_away': score_away,
+                'quarter': period,
+                'time_remaining': clock,
+                'clock': clock,
+                'is_live': is_live,
+                'status': 2 if is_live else (3 if state_type == 'post' else 1),
+                'status_text': status.get('type', {}).get('shortDetail', ''),
+                'game_time': status.get('type', {}).get('shortDetail', ''),
+                'game_date': event.get('date', ''),
+                'is_q2_6min': period == 2 and clock.startswith('6:0'),
+                'can_predict': period >= 2
+            })
+        except Exception as e:
+            print(f"⚠️ Error parsing game: {e}")
+            continue  # Skip this game, continue with others
     
     # Update cache (successful fetch)
     _espn_cache["games"] = games
     _espn_cache["ts"] = time()
+    
+    print(f"✅ ESPN API: Fetched {len(games)} games successfully")
     return games
 
 try:

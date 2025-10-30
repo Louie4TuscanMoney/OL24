@@ -53,63 +53,109 @@ def main():
 
 
 def fetch_all_games():
-    """Fetch ALL games (live + completed) from ESPN API"""
-    try:
-        # Use ESPN API (most reliable and fast)
-        espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-        response = requests.get(espn_url, timeout=10)
-        
-        if response.status_code != 200:
-            print(f"   ⚠️  ESPN API returned {response.status_code}")
-            return []
-        
-        data = response.json()
-        espn_events = data.get('events', [])
-        
-        # Map ESPN format to our expected format (similar to nba_api structure)
-        games = []
-        for event in espn_events:
-            competition = event.get('competitions', [{}])[0]
-            status = event.get('status', {})
-            competitors = competition.get('competitors', [])
+    """
+    Fetch ALL games (live + completed) from ESPN API
+    
+    HARDENED FOR ZERO DOWNTIME:
+    - 5 retry attempts with exponential backoff
+    - 10 second timeout
+    - Data validation
+    - Never fails silently
+    """
+    import time
+    
+    espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+    headers = {
+        "User-Agent": "OntologicXYZ/1.0 (+https://ontologicxyz.com)"
+    }
+    max_retries = 5
+    backoffs = [0.5, 1.0, 2.0, 4.0, 8.0]
+    
+    # Retry loop
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(espn_url, timeout=10, headers=headers)
             
-            # Find home and away teams
-            home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
-            away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+            if response.status_code != 200:
+                print(f"   ⚠️  ESPN API returned {response.status_code} (attempt {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    time.sleep(backoffs[attempt])
+                    continue
+                return []
             
-            # Determine game status
-            state_type = status.get('type', {}).get('state', 'pre')
-            if state_type == 'in':
-                game_status = 2  # Live
-            elif state_type == 'post':
-                game_status = 3  # Final
+            data = response.json()
+            espn_events = data.get('events', [])
+            
+            # Map ESPN format to our expected format (similar to nba_api structure)
+            games = []
+            for event in espn_events:
+                try:
+                    competition = event.get('competitions', [{}])[0]
+                    status = event.get('status', {})
+                    competitors = competition.get('competitors', [])
+                    
+                    # Find home and away teams
+                    home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
+                    away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+                    
+                    # Determine game status
+                    state_type = status.get('type', {}).get('state', 'pre')
+                    if state_type == 'in':
+                        game_status = 2  # Live
+                    elif state_type == 'post':
+                        game_status = 3  # Final
+                    else:
+                        game_status = 1  # Scheduled
+                    
+                    # Parse scores with validation
+                    try:
+                        home_score = int(home_team.get('score', 0))
+                        away_score = int(away_team.get('score', 0))
+                    except (ValueError, TypeError):
+                        home_score = 0
+                        away_score = 0
+                    
+                    # Validate required fields
+                    game_id = event.get('id')
+                    home_abbr = home_team.get('team', {}).get('abbreviation', '')
+                    away_abbr = away_team.get('team', {}).get('abbreviation', '')
+                    
+                    if not game_id or not home_abbr or not away_abbr:
+                        print(f"   ⚠️  Skipping game with missing data")
+                        continue
+                    
+                    games.append({
+                        'gameId': game_id,
+                        'gameStatus': game_status,
+                        'period': status.get('period', 0),
+                        'gameClock': status.get('displayClock', ''),
+                        'homeTeam': {
+                            'teamTricode': home_abbr,
+                            'score': home_score
+                        },
+                        'awayTeam': {
+                            'teamTricode': away_abbr,
+                            'score': away_score
+                        }
+                    })
+                except Exception as e:
+                    print(f"   ⚠️  Error parsing game: {e}")
+                    continue
+            
+            print(f"   📡 Fetched {len(games)} games from ESPN API")
+            return games
+            
+        except Exception as e:
+            print(f"   ❌ Error fetching ESPN scoreboard (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                print(f"   ⏳ Retrying in {backoffs[attempt]}s...")
+                time.sleep(backoffs[attempt])
             else:
-                game_status = 1  # Scheduled
-            
-            games.append({
-                'gameId': event.get('id'),
-                'gameStatus': game_status,
-                'period': status.get('period', 0),
-                'gameClock': status.get('displayClock', ''),
-                'homeTeam': {
-                    'teamTricode': home_team.get('team', {}).get('abbreviation', ''),
-                    'score': int(home_team.get('score', 0))
-                },
-                'awayTeam': {
-                    'teamTricode': away_team.get('team', {}).get('abbreviation', ''),
-                    'score': int(away_team.get('score', 0))
-                }
-            })
-        
-        print(f"   📡 Fetched {len(games)} games from ESPN API")
-        
-        return games
-        
-    except Exception as e:
-        print(f"   ❌ Error fetching ESPN scoreboard: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
+                import traceback
+                traceback.print_exc()
+                return []
+    
+    return []
 
 
 def update_game_result(game):
