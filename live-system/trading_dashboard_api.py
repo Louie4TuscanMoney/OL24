@@ -2088,7 +2088,8 @@ async def get_team_depth_chart(team_abbr: str):
             if row[2] in positions:
                 positions[row[2]].append(player_data)
             
-            if row[6]:  # is_starter
+            # Only add to starters if we haven't reached 5 yet
+            if row[6] and len(starters) < 5:  # is_starter AND less than 5 starters
                 starters.append(player_data)
             else:
                 bench.append(player_data)
