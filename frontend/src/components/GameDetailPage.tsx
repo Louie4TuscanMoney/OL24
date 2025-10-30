@@ -2,6 +2,7 @@ import { type Component, createSignal, createEffect, onCleanup, Show } from 'sol
 import { wsService } from '../services/websocket';
 import { MambaLiveWidget } from './MambaLiveWidget';
 import { LiveSnapshotsWidget } from './LiveSnapshotsWidget';
+import { MambaFeaturesWidget } from './MambaFeaturesWidget';
 
 interface GameDetailPageProps {
   gameId: string;
@@ -345,6 +346,13 @@ const GameDetailPage: Component<GameDetailPageProps> = (props) => {
           <Show when={game()!.is_live}>
             <div class="mb-6">
               <LiveSnapshotsWidget gameId={props.gameId} />
+            </div>
+          </Show>
+
+          {/* 🧠 MAMBA FEATURES */}
+          <Show when={game()!.is_live}>
+            <div class="mb-6">
+              <MambaFeaturesWidget gameId={props.gameId} />
             </div>
           </Show>
 
