@@ -7,6 +7,7 @@ Fetches play-by-play data and triggers Mamba at Q2 6:00
 """
 
 import os
+import sys
 import requests
 import psycopg2
 from datetime import datetime
@@ -14,6 +15,10 @@ import json
 import numpy as np
 
 DATABASE_URL = os.getenv('DATABASE_URL')
+
+if not DATABASE_URL:
+    print("❌ ERROR: DATABASE_URL environment variable not set!")
+    sys.exit(1)
 
 def main():
     """Main cron job - runs every 30 seconds"""
@@ -628,5 +633,11 @@ def extract_mamba_features_from_pbp(pbp_data):
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print(f"\n❌ CRITICAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
