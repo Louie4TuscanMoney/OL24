@@ -11,6 +11,11 @@
   },
   "cron": [
     {
+      "schedule": "30 3 * * *",
+      "command": "python cron_daily_nba_update.py",
+      "description": "Daily NBA data update at 3:30 AM UTC (standings, stats, schedule)"
+    },
+    {
       "schedule": "*/30 * * * * *",
       "command": "python cron_mamba_autonomous.py",
       "description": "Mamba autonomous predictions for ALL live games every 30 seconds"
