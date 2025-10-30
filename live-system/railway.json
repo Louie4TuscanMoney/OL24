@@ -16,9 +16,9 @@
       "description": "Daily NBA data update at 3:30 AM UTC (standings, stats, schedule)"
     },
     {
-      "schedule": "*/30 * * * * *",
+      "schedule": "* * * * *",
       "command": "python cron_mamba_autonomous.py",
-      "description": "Mamba autonomous predictions for ALL live games every 30 seconds"
+      "description": "Mamba autonomous predictions for ALL live games every minute"
     }
   ]
 }
