@@ -142,7 +142,16 @@ const Dashboard: Component<DashboardProps> = (props) => {
 
   // Upcoming games - use scheduledGames from API, not WebSocket, sorted by time
   const upcomingGames = () => {
-    const filtered = scheduledGames().filter(g => g.status !== 'Final' && g.status !== 'Live');
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    const filtered = scheduledGames().filter(g => {
+      // Only show today's games or future games
+      if (g.status === 'Final' || g.status === 'Live') return false;
+      
+      // Filter out past games
+      const gameDate = g.date || '';
+      return gameDate >= today;
+    });
     
     // Sort by date and time (earliest first)
     return filtered.sort((a, b) => {
