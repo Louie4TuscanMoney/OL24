@@ -3039,6 +3039,43 @@ async def get_team_schedule(team_abbr: str, days_ahead: int = 14):
         return {"error": str(e)}
 
 
+def background_mamba_collector():
+    """Run Mamba cron in background continuously for automatic snapshots"""
+    import sys
+    import importlib.util
+    
+    # Wait for API to start
+    time.sleep(5)
+    
+    print("\n✅ Background Mamba collector starting...")
+    
+    # Load the cron module
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "cron_mamba_autonomous",
+            os.path.join(os.path.dirname(__file__), "cron_mamba_autonomous.py")
+        )
+        if spec and spec.loader:
+            cron_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(cron_module)
+        else:
+            print("⚠️  Could not load cron module")
+            return
+    except Exception as e:
+        print(f"⚠️  Error loading cron module: {e}")
+        return
+    
+    while True:
+        try:
+            # Run the main function
+            if hasattr(cron_module, 'main'):
+                cron_module.main()
+        except Exception as e:
+            print(f"⚠️  Mamba background error: {e}")
+        
+        # Wait 60 seconds before next run
+        time.sleep(60)
+
 def start_dashboard_api(host: str = "0.0.0.0", port: int = None):
     """
     Start the dashboard API
@@ -3061,6 +3098,12 @@ def start_dashboard_api(host: str = "0.0.0.0", port: int = None):
     print(f"  • http://0.0.0.0:{port}/api/opportunities")
     print(f"  • ws://0.0.0.0:{port}/ws (WebSocket)")
     print("\n" + "="*80)
+    
+    # Start background Mamba collector
+    import threading
+    collector_thread = threading.Thread(target=background_mamba_collector, daemon=True)
+    collector_thread.start()
+    print("✅ Started background Mamba snapshot collector (runs every 60 seconds)")
     
     uvicorn.run(app, host=host, port=port)
 
