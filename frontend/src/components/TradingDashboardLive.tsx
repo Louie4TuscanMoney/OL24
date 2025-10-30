@@ -10,6 +10,7 @@
  */
 
 import { createSignal, createEffect, Show, For } from 'solid-js';
+import { LiveSnapshotsWidget } from './LiveSnapshotsWidget';
 
 interface BetOpportunity {
   game_id: string;
@@ -209,6 +210,11 @@ export function TradingDashboard() {
                   <div>Home: {opp.home_win_probability}%</div>
                   <div>Away: {100 - opp.home_win_probability}%</div>
                 </div>
+              </div>
+
+              {/* Live Snapshots Analysis */}
+              <div style="margin: 20px 0;">
+                <LiveSnapshotsWidget gameId={opp.game_id} />
               </div>
 
               {/* Betting Options */}
