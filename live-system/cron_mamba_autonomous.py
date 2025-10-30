@@ -39,13 +39,25 @@ def main():
         
         print(f"   📡 Found {len(live_games)} live games, {len(completed_games)} completed")
         
-        # 2. Process each LIVE game
+        # 2. Process each LIVE game (with error isolation)
         for game in live_games:
-            process_live_game(game)
+            try:
+                process_live_game(game)
+            except Exception as e:
+                print(f"   ❌ Error processing live game {game.get('gameId', 'unknown')}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue  # Continue with other games
         
         # 3. Process COMPLETED games (update results)
         for game in completed_games:
-            update_game_result(game)
+            try:
+                update_game_result(game)
+            except Exception as e:
+                print(f"   ❌ Error processing completed game {game.get('gameId', 'unknown')}: {e}")
+                import traceback
+                traceback.print_exc()
+                continue  # Continue with other games
         
         print(f"\n{'='*80}")
         print("✅ Cron cycle complete")
