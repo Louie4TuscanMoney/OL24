@@ -68,6 +68,7 @@ def get_live_games_from_espn(include_upcoming=True, include_completed=False):
     This is the single source of truth for all live game data.
     
     Reliability features:
+    - Smart caching (only fetch every 5 seconds to avoid rate limits)
     - 5 retry attempts with exponential backoff
     - 5 second timeout (handles slow responses)
     - 5 minute emergency cache (survives outages)
@@ -82,6 +83,11 @@ def get_live_games_from_espn(include_upcoming=True, include_completed=False):
         List of games in standardized format
     """
     import requests
+    
+    # Check cache first (smart rate limiting: only fetch every 5 seconds)
+    cache_age = time() - _espn_cache["ts"]
+    if _espn_cache["games"] and cache_age < 5:  # Cache valid for 5 seconds
+        return _espn_cache["games"]
     
     espn_url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
     headers = {
