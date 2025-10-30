@@ -2638,6 +2638,56 @@ async def get_win_probability_timeline(game_id: str):
         return {"error": str(e)}
 
 
+@app.get("/api/game/{game_id}/play-by-play")
+async def get_play_by_play_snapshots(game_id: str):
+    """
+    Get minute-by-minute score snapshots for a game
+    Used to display scoring patterns and trends
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "Database not configured"}
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get play-by-play snapshots
+        cursor.execute("""
+            SELECT event_num, period, clock, time_elapsed_seconds, 
+                   home_score, away_score, score_margin, created_at
+            FROM play_by_play
+            WHERE game_id = %s
+            ORDER BY time_elapsed_seconds ASC
+        """, (game_id,))
+        
+        snapshots = cursor.fetchall()
+        
+        results = []
+        for row in snapshots:
+            results.append({
+                'event_num': row[0],
+                'period': row[1],
+                'clock': row[2],
+                'time_elapsed': row[3],
+                'home_score': row[4],
+                'away_score': row[5],
+                'margin': row[6],
+                'timestamp': row[7].isoformat() if row[7] else None
+            })
+        
+        conn.close()
+        
+        return {
+            'game_id': game_id,
+            'snapshots': results,
+            'count': len(results),
+            'latest': results[-1] if results else None
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/game/{game_id}/details")
 async def get_game_details(game_id: str):
     """
