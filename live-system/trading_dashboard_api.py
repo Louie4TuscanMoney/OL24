@@ -1916,9 +1916,9 @@ async def get_all_injuries():
 
 
 @app.get("/api/schedule")
-async def get_nba_schedule(days_ahead: int = 7):
+async def get_nba_schedule(days_ahead: int = 7, days_back: int = 7):
     """
-    Get NBA schedule for next N days with PST/PDT times
+    Get NBA schedule for past N days and next N days with PST/PDT times
     """
     conn = get_db_connection()
     if not conn:
@@ -1929,6 +1929,7 @@ async def get_nba_schedule(days_ahead: int = 7):
         from zoneinfo import ZoneInfo
         
         today = date.today()
+        start_date = today - timedelta(days=days_back)
         end_date = today + timedelta(days=days_ahead)
         
         cursor = conn.cursor()
@@ -1944,7 +1945,7 @@ async def get_nba_schedule(days_ahead: int = 7):
             JOIN teams away ON away.team_id = s.away_team_id
             WHERE s.game_date >= %s AND s.game_date <= %s
             ORDER BY s.game_date, s.game_time
-        """, (today, end_date))
+        """, (start_date, end_date))
         
         games = []
         for row in cursor.fetchall():

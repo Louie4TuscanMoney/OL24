@@ -37,17 +37,11 @@ const SchedulePage: Component = () => {
   const fetchSchedule = async () => {
     setLoading(true);
     try {
+      // Fetch more games to include past results
       const response = await fetch(`${API_BASE}/api/schedule?days_ahead=${daysAhead()}`);
       const data = await response.json();
       
       let gamesList = data.games || [];
-      
-      // Filter out past games (only show today and future)
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-      gamesList = gamesList.filter((g: ScheduledGame) => {
-        const gameDate = g.date || '';
-        return gameDate >= today;
-      });
       
       // Filter by team if selected
       if (selectedTeam()) {
@@ -79,13 +73,28 @@ const SchedulePage: Component = () => {
 
   const groupGamesByDate = () => {
     const grouped: { [key: string]: ScheduledGame[] } = {};
+    const today = new Date().toISOString().split('T')[0];
+    
     games().forEach(game => {
       if (!grouped[game.date]) {
         grouped[game.date] = [];
       }
       grouped[game.date].push(game);
     });
-    return grouped;
+    
+    // Sort dates: past first, then today, then future
+    const sortedDates = Object.keys(grouped).sort((a, b) => {
+      if (a < today && b >= today) return 1;  // Past comes after future
+      if (a >= today && b < today) return -1; // Future comes before past
+      return a.localeCompare(b);  // Normal sort for same category
+    });
+    
+    const sorted: { [key: string]: ScheduledGame[] } = {};
+    sortedDates.forEach(date => {
+      sorted[date] = grouped[date];
+    });
+    
+    return sorted;
   };
 
   return (
