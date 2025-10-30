@@ -92,13 +92,13 @@ const Dashboard: Component<DashboardProps> = (props) => {
   
   const API_BASE = 'https://ol24-production.up.railway.app';
 
-  // Fetch scheduled games
+  // Fetch scheduled games - use live-games endpoint which pulls from ESPN directly
   const fetchScheduledGames = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/schedule?days=3`);
+      const response = await fetch(`${API_BASE}/api/live-games`);
       const data = await response.json();
       setScheduledGames(data.games || []);
-      console.log('📅 Fetched scheduled games:', data.games?.length || 0);
+      console.log('📅 Fetched scheduled games from ESPN:', data.games?.length || 0);
     } catch (error) {
       console.error('Error fetching schedule:', error);
     }
