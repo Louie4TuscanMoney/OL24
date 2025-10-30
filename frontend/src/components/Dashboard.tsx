@@ -86,10 +86,35 @@ const Dashboard: Component<DashboardProps> = (props) => {
   const [predictions] = wsService.predictions;
   const [edges] = wsService.edges;
   const [recommendations] = wsService.recommendations;
+  
+  // Scheduled games from API
+  const [scheduledGames, setScheduledGames] = createSignal<any[]>([]);
+  
+  const API_BASE = 'https://ol24-production.up.railway.app';
+
+  // Fetch scheduled games
+  const fetchScheduledGames = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/schedule?days=3`);
+      const data = await response.json();
+      setScheduledGames(data.games || []);
+      console.log('📅 Fetched scheduled games:', data.games?.length || 0);
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+    }
+  };
 
   // Connect on mount
   onMount(() => {
     wsService.connect();
+    fetchScheduledGames();
+    
+    // Refresh scheduled games every 5 minutes
+    const scheduleInterval = setInterval(fetchScheduledGames, 5 * 60 * 1000);
+    
+    onCleanup(() => {
+      clearInterval(scheduleInterval);
+    });
   });
 
   // Disconnect on unmount
@@ -115,8 +140,8 @@ const Dashboard: Component<DashboardProps> = (props) => {
   // Live games
   const liveGames = () => gamesList().filter(g => g.is_live);
 
-  // Upcoming games (not live)
-  const upcomingGames = () => gamesList().filter(g => !g.is_live);
+  // Upcoming games - use scheduledGames from API, not WebSocket
+  const upcomingGames = () => scheduledGames().filter(g => g.status !== 'Final' && g.status !== 'Live');
 
   // Total edges detected
   const edgesCount = () => 
@@ -368,45 +393,70 @@ const Dashboard: Component<DashboardProps> = (props) => {
                   >
                     <div class="text-center mb-4 pb-4 border-b border-gray-800">
                       <div class="text-blue-400 text-xs font-semibold uppercase mb-2">Scheduled</div>
-                      <Show when={game.game_date && game.game_time}>
-                        <div class="text-sm text-white font-medium mb-1">{game.game_date}</div>
-                        <div class="text-sm text-gray-400">{game.game_time}</div>
-                      </Show>
-                      <Show when={!game.game_date}>
-                        <div class="text-xs text-gray-500">Game ID: {game.game_id}</div>
-                      </Show>
+                      <div class="text-sm text-white font-medium mb-1">
+                        {game.date || game.game_date || 'TBD'}
+                      </div>
+                      <div class="text-lg text-blue-400 font-bold">
+                        {game.time_pst || game.time || game.game_time || 'Time TBD'}
+                      </div>
                     </div>
 
                     {/* Teams */}
                     <div class="space-y-3">
                       {/* Away Team */}
                       <div 
-                        onClick={(e) => handleTeamClick(e, game.away_team)}
+                        onClick={(e) => handleTeamClick(e, game.away_team?.abbr || game.away_team?.name || game.away_team)}
                         class="flex items-center gap-3 hover:bg-white/5 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                       >
-                        <img 
-                          src={`https://cdn.nba.com/logos/nba/${getTeamId(game.away_team)}/primary/L/logo.svg`}
-                          alt={game.away_team}
-                          class="w-10 h-10"
-                        />
+                        <Show 
+                          when={game.away_team?.logo}
+                          fallback={
+                            <img 
+                              src={`https://cdn.nba.com/logos/nba/${getTeamId(game.away_team?.abbr || game.away_team?.name || game.away_team)}/primary/L/logo.svg`}
+                              alt={game.away_team?.abbr}
+                              class="w-10 h-10"
+                            />
+                          }
+                        >
+                          <img 
+                            src={game.away_team.logo}
+                            alt={game.away_team.abbr}
+                            class="w-10 h-10"
+                          />
+                        </Show>
                         <div class="flex-1 min-w-0">
-                          <div class="text-white font-semibold text-sm truncate">{game.away_team}</div>
+                          <div class="text-white font-semibold text-sm truncate">
+                            {game.away_team?.abbr || game.away_team?.name || game.away_team}
+                          </div>
                           <div class="text-gray-500 text-xs">Away</div>
                         </div>
                       </div>
 
                       {/* Home Team */}
                       <div 
-                        onClick={(e) => handleTeamClick(e, game.home_team)}
+                        onClick={(e) => handleTeamClick(e, game.home_team?.abbr || game.home_team?.name || game.home_team)}
                         class="flex items-center gap-3 hover:bg-white/5 rounded-lg p-2 -m-2 transition-colors cursor-pointer"
                       >
-                        <img 
-                          src={`https://cdn.nba.com/logos/nba/${getTeamId(game.home_team)}/primary/L/logo.svg`}
-                          alt={game.home_team}
-                          class="w-10 h-10"
-                        />
+                        <Show 
+                          when={game.home_team?.logo}
+                          fallback={
+                            <img 
+                              src={`https://cdn.nba.com/logos/nba/${getTeamId(game.home_team?.abbr || game.home_team?.name || game.home_team)}/primary/L/logo.svg`}
+                              alt={game.home_team?.abbr}
+                              class="w-10 h-10"
+                            />
+                          }
+                        >
+                          <img 
+                            src={game.home_team.logo}
+                            alt={game.home_team.abbr}
+                            class="w-10 h-10"
+                          />
+                        </Show>
                         <div class="flex-1 min-w-0">
-                          <div class="text-white font-semibold text-sm truncate">{game.home_team}</div>
+                          <div class="text-white font-semibold text-sm truncate">
+                            {game.home_team?.abbr || game.home_team?.name || game.home_team}
+                          </div>
                           <div class="text-gray-500 text-xs">Home</div>
                         </div>
                       </div>
