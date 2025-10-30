@@ -26,16 +26,11 @@ def main():
     print()
     
     # Run ESPN comprehensive pipeline
-    # Note: Need to adjust path for Railway deployment
-    script_path = "backend/services/espn_comprehensive_pipeline.py"
-    
-    if not os.path.exists(script_path):
-        # Try alternative path
-        script_path = "espn_comprehensive_pipeline.py"
+    # Path for Railway deployment (script is in live-system root)
+    script_path = "espn_comprehensive_pipeline.py"
     
     if not os.path.exists(script_path):
         print(f"❌ Could not find ESPN pipeline script")
-        print(f"   Tried: backend/services/espn_comprehensive_pipeline.py")
         print(f"   Tried: espn_comprehensive_pipeline.py")
         return 1
     
