@@ -103,43 +103,45 @@ def get_live_games_from_espn():
         print(f"❌ ESPN fetch failed ({last_err}); no cache available")
         return []
     
-        espn_events = data.get('events', [])
+    # Parse ESPN response
+    espn_events = data.get('events', [])
+    
+    games = []
+    for event in espn_events:
+        competition = event.get('competitions', [{}])[0]
+        status = event.get('status', {})
+        competitors = competition.get('competitors', [])
         
-        games = []
-        for event in espn_events:
-            competition = event.get('competitions', [{}])[0]
-            status = event.get('status', {})
-            competitors = competition.get('competitors', [])
-            
-            # Find home and away teams
-            home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
-            away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
-            
-            # Parse period and clock
-            period = status.get('period', 0)
-            clock = status.get('displayClock', '')
-            
-            # Determine if live
-            state_type = status.get('type', {}).get('state', 'pre')
-            is_live = state_type == 'in'
-            
-            games.append({
-                'game_id': event.get('id'),
-                'home_team': home_team.get('team', {}).get('abbreviation', ''),
-                'away_team': away_team.get('team', {}).get('abbreviation', ''),
-                'score_home': int(home_team.get('score', 0)),
-                'score_away': int(away_team.get('score', 0)),
-                'quarter': period,
-                'time_remaining': clock,
-                'clock': clock,
-                'is_live': is_live,
-                'status': 2 if is_live else (3 if state_type == 'post' else 1),
-                'status_text': status.get('type', {}).get('shortDetail', ''),
-                'game_time': status.get('type', {}).get('shortDetail', ''),
-                'game_date': event.get('date', ''),
-                'is_q2_6min': period == 2 and clock.startswith('6:0'),
-                'can_predict': period >= 2
-            })
+        # Find home and away teams
+        home_team = next((c for c in competitors if c.get('homeAway') == 'home'), {})
+        away_team = next((c for c in competitors if c.get('homeAway') == 'away'), {})
+        
+        # Parse period and clock
+        period = status.get('period', 0)
+        clock = status.get('displayClock', '')
+        
+        # Determine if live
+        state_type = status.get('type', {}).get('state', 'pre')
+        is_live = state_type == 'in'
+        
+        games.append({
+            'game_id': event.get('id'),
+            'home_team': home_team.get('team', {}).get('abbreviation', ''),
+            'away_team': away_team.get('team', {}).get('abbreviation', ''),
+            'score_home': int(home_team.get('score', 0)),
+            'score_away': int(away_team.get('score', 0)),
+            'quarter': period,
+            'time_remaining': clock,
+            'clock': clock,
+            'is_live': is_live,
+            'status': 2 if is_live else (3 if state_type == 'post' else 1),
+            'status_text': status.get('type', {}).get('shortDetail', ''),
+            'game_time': status.get('type', {}).get('shortDetail', ''),
+            'game_date': event.get('date', ''),
+            'is_q2_6min': period == 2 and clock.startswith('6:0'),
+            'can_predict': period >= 2
+        })
+    
     # Update cache (successful fetch)
     _espn_cache["games"] = games
     _espn_cache["ts"] = time()
