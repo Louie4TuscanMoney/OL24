@@ -142,10 +142,16 @@ def get_live_games_from_espn(include_upcoming=True, include_completed=False):
             state_type = status.get('type', {}).get('state', 'pre')
             is_live = state_type == 'in'
             
+            # Debug logging for quarter transitions
+            if state_type not in ['in', 'pre', 'post']:
+                print(f"⚠️ Unknown state_type: {state_type} for game {event.get('id')}")
+            
             # Filter games based on parameters
             if state_type == 'post' and not include_completed:
                 continue  # Skip completed games
             if state_type not in ['in', 'pre']:
+                # Log when we're filtering out games to debug quarter transitions
+                print(f"⚠️ Filtering out game with state_type: {state_type}")
                 continue  # Only include live or upcoming
             
             # Skip games from previous days (only today's games)
