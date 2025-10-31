@@ -3,7 +3,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "uvicorn trading_dashboard_api:app --host 0.0.0.0 --port $PORT --reload",
+    "startCommand": "cd live-system && uvicorn trading_dashboard_api:app --host 0.0.0.0 --port $PORT --reload",
     "healthcheckPath": "/",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",
