@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESPN API Live Verification</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .status-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .game-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .game-card.live {
+            border-left: 5px solid #ff4444;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        .score {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .team {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .status {
+            background: #ff4444;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .timestamp {
+            text-align: center;
+            opacity: 0.7;
+            margin-top: 10px;
+        }
+        .error {
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid #ff4444;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏀 ESPN API Live Verification</h1>
+        
+        <div class="status-box">
+            <h2>📡 API Status</h2>
+            <div id="api-status">Loading...</div>
+        </div>
+
+        <div class="status-box">
+            <h2>🔴 Live Games</h2>
+            <div id="live-games">Loading...</div>
+        </div>
+
+        <div class="status-box">
+            <h2>📅 All Games Today</h2>
+            <div id="all-games">Loading...</div>
+        </div>
+
+        <button class="refresh-btn" onclick="loadGames()">🔄 Refresh Now</button>
+        
+        <div class="timestamp" id="timestamp"></div>
+    </div>
+
+    <script>
+        async function loadGames() {
+            const timestamp = new Date().toLocaleTimeString();
+            document.getElementById('timestamp').textContent = `Last updated: ${timestamp}`;
+            
+            try {
+                // Test ESPN API directly
+                const espnResponse = await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard');
+                const espnData = await espnResponse.json();
+                const events = espnData.events || [];
+                
+                document.getElementById('api-status').innerHTML = `
+                    <div style="font-size: 24px; margin: 10px 0;">
+                        ✅ ESPN API: <strong>ONLINE</strong><br>
+                        📊 Total Games: <strong>${events.length}</strong>
+                    </div>
+                `;
+
+                // Show live games
+                const liveGamesHtml = events
+                    .filter(event => {
+                        const state = event.status?.type?.state;
+                        return state === 'in';
+                    })
+                    .map(event => {
+                        const competition = event.competitions[0];
+                        const status = event.status;
+                        const competitors = competition.competitors;
+                        
+                        const homeTeam = competitors.find(c => c.homeAway === 'home');
+                        const awayTeam = competitors.find(c => c.homeAway === 'away');
+                        
+                        return `
+                            <div class="game-card live">
+                                <div>
+                                    <div class="team">${awayTeam.team.abbreviation}</div>
+                                    <div class="score">${awayTeam.score}</div>
+                                </div>
+                                <div style="text-align: center;">
+                                    <div class="status">🔴 LIVE</div>
+                                    <div style="margin-top: 10px;">Q${status.period} ${status.displayClock}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div class="team">${homeTeam.team.abbreviation}</div>
+                                    <div class="score">${homeTeam.score}</div>
+                                </div>
+                            </div>
+                        `;
+                    })
+                    .join('');
+
+                if (liveGamesHtml) {
+                    document.getElementById('live-games').innerHTML = liveGamesHtml;
+                } else {
+                    document.getElementById('live-games').innerHTML = '<p>⏰ No games currently live</p>';
+                }
+
+                // Show all games
+                const allGamesHtml = events.map(event => {
+                    const competition = event.competitions[0];
+                    const status = event.status;
+                    const competitors = competition.competitors;
+                    
+                    const homeTeam = competitors.find(c => c.homeAway === 'home');
+                    const awayTeam = competitors.find(c => c.homeAway === 'away');
+                    
+                    const state = status.type.state;
+                    const isLive = state === 'in';
+                    const isFinal = state === 'post';
+                    
+                    return `
+                        <div class="game-card ${isLive ? 'live' : ''}">
+                            <div>
+                                <div class="team">${awayTeam.team.abbreviation}</div>
+                                <div class="score">${awayTeam.score}</div>
+                            </div>
+                            <div style="text-align: center;">
+                                ${isLive ? '<div class="status">🔴 LIVE</div>' : ''}
+                                ${isFinal ? '<div class="status" style="background: #44ff44;">✅ FINAL</div>' : ''}
+                                ${!isLive && !isFinal ? '<div style="opacity: 0.7;">' + status.type.shortDetail + '</div>' : ''}
+                                ${isLive ? '<div style="margin-top: 5px;">Q' + status.period + ' ' + status.displayClock + '</div>' : ''}
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="team">${homeTeam.team.abbreviation}</div>
+                                <div class="score">${homeTeam.score}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                document.getElementById('all-games').innerHTML = allGamesHtml;
+
+            } catch (error) {
+                document.getElementById('api-status').innerHTML = `
+                    <div class="error">
+                        ❌ Error loading games: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Load games on page load
+        loadGames();
+
+        // Auto-refresh every 5 seconds
+        setInterval(loadGames, 5000);
+    </script>
+</body>
+</html>
+

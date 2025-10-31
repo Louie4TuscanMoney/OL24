@@ -137,8 +137,16 @@ const Dashboard: Component<DashboardProps> = (props) => {
     return gamesArray;
   };
 
-  // Live games
-  const liveGames = () => gamesList().filter(g => g.is_live);
+  // Live games - prioritize WebSocket, fallback to scheduledGames if needed
+  const liveGames = () => {
+    const wsLive = gamesList().filter(g => g.is_live);
+    // If WebSocket has live games, use them; otherwise check scheduledGames as fallback
+    if (wsLive.length > 0) {
+      return wsLive;
+    }
+    // Fallback: get live games from scheduledGames (fetched from ESPN)
+    return scheduledGames().filter(g => g.is_live);
+  };
 
   // Upcoming games - use scheduledGames from API, not WebSocket, sorted by time
   const upcomingGames = () => {
@@ -146,7 +154,8 @@ const Dashboard: Component<DashboardProps> = (props) => {
     
     const filtered = scheduledGames().filter(g => {
       // Only show today's games or future games
-      if (g.status === 'Final' || g.status === 'Live') return false;
+      // Use is_live flag (boolean) not status string
+      if (g.is_live) return false;  // Exclude live games
       
       // Filter out past games
       const gameDate = g.date || '';
